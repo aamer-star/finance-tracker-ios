@@ -41,7 +41,7 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'POST') {
     const { appData } = JSON.parse(event.body || '{}');
     const { error } = await db.from('user_data').upsert(
-      { user_id: user.id, data: appData, updated_at: new Date().toISOString() },
+      { user_id: user.id, data: appData },
       { onConflict: 'user_id' }
     );
     if (error) {
