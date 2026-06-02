@@ -8,7 +8,7 @@ async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Stock
   if (!tickers.length) return {};
 
   const symbols = tickers.join(',');
-  const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose`;
+  const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,earningsTimestamp,earningsTimestampStart,epsForward,dividendDate`;
   const url = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
 
   try {
@@ -22,6 +22,7 @@ async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Stock
       const item = q as Record<string, unknown>;
       const ticker = String(item.symbol ?? '');
       if (!ticker) continue;
+      const earningsTs = (item.earningsTimestamp ?? item.earningsTimestampStart) as number | undefined;
       const quote: StockQuote = {
         ticker,
         price: Number(item.regularMarketPrice ?? 0),
@@ -29,6 +30,9 @@ async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Stock
         changePercent: Number(item.regularMarketChangePercent ?? 0),
         previousClose: Number(item.regularMarketPreviousClose ?? 0),
         lastUpdated: Date.now(),
+        earningsDate: earningsTs || undefined,
+        epsForward: item.epsForward ? Number(item.epsForward) : undefined,
+        dividendDate: item.dividendDate ? Number(item.dividendDate) : undefined,
       };
       if (quote.price > 0) {
         results[ticker] = quote;

@@ -27,6 +27,9 @@ export interface StockQuote {
   changePercent: number;
   previousClose: number;
   lastUpdated: number; // timestamp
+  earningsDate?: number; // unix timestamp
+  epsForward?: number;
+  dividendDate?: number; // unix timestamp
 }
 
 export interface RealizedGain {

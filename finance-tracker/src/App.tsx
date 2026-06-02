@@ -142,7 +142,7 @@ export default function App() {
             <Watchlist data={data} quotes={quotes} quotesLoading={quotesLoading}
               onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
           } />
-          <Route path="/calendar" element={<Calendar data={data} />} />
+          <Route path="/calendar" element={<Calendar data={data} quotes={quotes} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
           <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />
         </Routes>
