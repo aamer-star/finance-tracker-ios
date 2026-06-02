@@ -6,10 +6,14 @@ const defaults: AppData = {
   transactions: [],
   watchlist: [],
   apiKey: '',
-  accounts: ['Default'],
+  accounts: [],
   realizedGainsFromImport: 0,
   snapshotPrices: {},
 };
+
+export function emptyData(): AppData {
+  return { ...defaults };
+}
 
 export function loadData(): AppData {
   try {

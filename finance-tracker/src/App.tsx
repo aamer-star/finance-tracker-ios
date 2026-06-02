@@ -13,7 +13,7 @@ import Watchlist from './pages/Watchlist';
 import Calendar from './pages/Calendar';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
-import { loadData, saveData } from './utils/storage';
+import { loadData, saveData, emptyData } from './utils/storage';
 import { fetchAllQuotes, fetchQuote } from './utils/stockApi';
 import { getSession, clearSession } from './lib/auth';
 import { loadFromCloud, saveToCloud } from './lib/cloudSync';
@@ -22,7 +22,8 @@ import type { AppData, StockQuote } from './types';
 interface AuthUser { id: string; email: string }
 
 export default function App() {
-  const [data, setData] = useState<AppData>(loadData);
+  // Only load from localStorage if already logged in; otherwise start empty
+  const [data, setData] = useState<AppData>(() => getSession() ? loadData() : emptyData());
   const [quotes, setQuotes] = useState<Record<string, StockQuote>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -91,7 +92,9 @@ export default function App() {
 
   const handleSignOut = () => {
     clearSession();
+    localStorage.removeItem('finance_tracker_data');
     setUser(null);
+    setData(emptyData());
   };
 
   const allAccounts = ['All', ...data.accounts];

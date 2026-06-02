@@ -231,25 +231,11 @@ export default function CalendarPage({ data }: Props) {
                             </div>
                           </div>
                           {e.type === 'earnings' && (e as EarningsEvent).epsEstimate != null && (
-                            <div className="mt-3 pt-3 border-t border-gray-800/80 grid grid-cols-3 gap-2 text-xs">
+                            <div className="mt-3 pt-3 border-t border-gray-800/80 grid grid-cols-2 gap-2 text-xs">
                               <div>
                                 <div className="text-gray-600">EPS Est.</div>
                                 <div className="text-gray-200 font-medium">${(e as EarningsEvent).epsEstimate!.toFixed(2)}</div>
                               </div>
-                              {(e as EarningsEvent).epsLow != null && (
-                                <div>
-                                  <div className="text-gray-600">Range</div>
-                                  <div className="text-gray-200 font-medium">
-                                    ${(e as EarningsEvent).epsLow!.toFixed(2)} – ${(e as EarningsEvent).epsHigh!.toFixed(2)}
-                                  </div>
-                                </div>
-                              )}
-                              {(e as EarningsEvent).revenueEstimate != null && (
-                                <div>
-                                  <div className="text-gray-600">Rev. Est.</div>
-                                  <div className="text-gray-200 font-medium">{formatRevenue((e as EarningsEvent).revenueEstimate!)}</div>
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>

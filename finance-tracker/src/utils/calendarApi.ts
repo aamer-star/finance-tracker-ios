@@ -2,9 +2,6 @@ export interface EarningsEvent {
   ticker: string;
   date: Date;
   epsEstimate?: number;
-  epsLow?: number;
-  epsHigh?: number;
-  revenueEstimate?: number;
   type: 'earnings';
 }
 
@@ -16,49 +13,52 @@ export interface DividendEvent {
 
 export type CalendarEvent = EarningsEvent | DividendEvent;
 
-async function fetchCalendarForTicker(ticker: string): Promise<CalendarEvent[]> {
-  const yahooUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=calendarEvents`;
+export async function fetchAllCalendarEvents(tickers: string[]): Promise<CalendarEvent[]> {
+  if (!tickers.length) return [];
+
+  const symbols = tickers.join(',');
+  const fields = 'symbol,earningsTimestamp,earningsTimestampStart,earningsTimestampEnd,epsForward,forwardEps,dividendDate';
+  const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=${encodeURIComponent(fields)}`;
   const url = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  const cal = data?.quoteSummary?.result?.[0]?.calendarEvents;
-  if (!cal) return [];
+
+  let results: Record<string, unknown>[] = [];
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    results = data?.quoteResponse?.result ?? [];
+  } catch {
+    return [];
+  }
 
   const events: CalendarEvent[] = [];
-  const now = new Date();
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000; // include up to 7 days ago
 
-  // Earnings
-  const earningsDates: { raw: number }[] = cal.earnings?.earningsDate ?? [];
-  for (const ed of earningsDates) {
-    const date = new Date(ed.raw * 1000);
-    if (date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) {
-      events.push({
-        ticker,
-        date,
-        type: 'earnings',
-        epsEstimate: cal.earnings?.earningsAverage?.raw,
-        epsLow: cal.earnings?.earningsLow?.raw,
-        epsHigh: cal.earnings?.earningsHigh?.raw,
-        revenueEstimate: cal.earnings?.revenueAverage?.raw,
-      });
+  for (const r of results) {
+    const ticker = r.symbol as string;
+
+    // Earnings — use earningsTimestamp if available, fall back to window start
+    const earningsTs = (r.earningsTimestamp ?? r.earningsTimestampStart) as number | undefined;
+    if (earningsTs) {
+      const date = new Date(earningsTs * 1000);
+      if (date.getTime() >= cutoff) {
+        events.push({
+          ticker,
+          date,
+          type: 'earnings',
+          epsEstimate: (r.epsForward ?? r.forwardEps) as number | undefined,
+        });
+      }
+    }
+
+    // Ex-dividend date
+    const divTs = r.dividendDate as number | undefined;
+    if (divTs) {
+      const date = new Date(divTs * 1000);
+      if (date.getTime() >= cutoff) {
+        events.push({ ticker, date, type: 'exdividend' });
+      }
     }
   }
 
-  // Ex-dividend
-  if (cal.exDividendDate?.raw) {
-    const date = new Date(cal.exDividendDate.raw * 1000);
-    if (date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) {
-      events.push({ ticker, date, type: 'exdividend' });
-    }
-  }
-
-  return events;
-}
-
-export async function fetchAllCalendarEvents(tickers: string[]): Promise<CalendarEvent[]> {
-  const results = await Promise.allSettled(tickers.map(fetchCalendarForTicker));
-  return results
-    .flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  return events.sort((a, b) => a.date.getTime() - b.date.getTime());
 }
