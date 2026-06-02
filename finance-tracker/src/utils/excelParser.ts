@@ -219,6 +219,36 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
           });
         });
 
+        // Second pass: scan ALL rows for narrative sell descriptions like
+        // "Sale of 578 shares of TSLA at $261.64/share"
+        const SALE_RE = /sale\s+of\s+([\d,]+)\s+shares?\s+of\s+([A-Z0-9.]+)\s+at\s+\$?([\d.]+)/i;
+        const existingIds = new Set(transactions.map((t) => t.id));
+
+        allRows.forEach((row, rowIdx) => {
+          (row as unknown[]).forEach((cell) => {
+            const text = String(cell ?? '').trim();
+            const m = text.match(SALE_RE);
+            if (!m) return;
+            const shares = parseFloat(m[1].replace(/,/g, ''));
+            const ticker = m[2].toUpperCase();
+            const price  = parseFloat(m[3]);
+            if (isNaN(shares) || isNaN(price) || !ticker) return;
+            const id = `${ticker}-SELL-narrative-${rowIdx}`;
+            if (existingIds.has(id)) return;
+            existingIds.add(id);
+            transactions.push({
+              id,
+              ticker,
+              action: 'SELL',
+              shares,
+              price,
+              date: new Date().toISOString().slice(0, 10),
+              account: defaultAccount,
+            });
+            detectedColumns['Sell Transactions'] = 'parsed from narrative text';
+          });
+        });
+
         resolve({ transactions, errors: [], detectedColumns });
       } catch (err) {
         resolve({ transactions: [], errors: [String(err)], detectedColumns: {} });
