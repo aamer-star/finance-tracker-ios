@@ -10,6 +10,7 @@ import Analytics from './pages/Analytics';
 import News from './pages/News';
 import TaxSummary from './pages/TaxSummary';
 import Watchlist from './pages/Watchlist';
+import Calendar from './pages/Calendar';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
 import { loadData, saveData } from './utils/storage';
@@ -138,6 +139,7 @@ export default function App() {
             <Watchlist data={data} quotes={quotes} quotesLoading={quotesLoading}
               onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
           } />
+          <Route path="/calendar" element={<Calendar data={data} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
           <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />
         </Routes>
