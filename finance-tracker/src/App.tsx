@@ -26,7 +26,6 @@ export default function App() {
   }, []);
 
   const loadQuotes = useCallback(async (d: AppData) => {
-    if (!d.apiKey) return;
     const tickers = [
       ...new Set([
         ...d.transactions.map((t) => t.ticker),
@@ -35,29 +34,28 @@ export default function App() {
     ];
     if (!tickers.length) return;
     setQuotesLoading(true);
-    const result = await fetchAllQuotes(tickers, d.apiKey);
+    // Yahoo Finance works without any API key; Finnhub key used as fallback
+    const result = await fetchAllQuotes(tickers, d.apiKey || undefined);
     setQuotes((prev) => ({ ...prev, ...result }));
     setQuotesLoading(false);
   }, []);
 
   const fetchSingleQuote = useCallback(async (ticker: string) => {
     const d = loadData();
-    if (!d.apiKey) return;
-    const q = await fetchQuote(ticker, d.apiKey);
+    const q = await fetchQuote(ticker, d.apiKey || undefined);
     if (q) setQuotes((prev) => ({ ...prev, [ticker]: q }));
   }, []);
 
-  // Load quotes on mount and when data changes
+  // Load quotes on mount and when transactions/watchlist change
   useEffect(() => {
     loadQuotes(data);
-  }, [data.apiKey, data.transactions.length, data.watchlist.length]);
+  }, [data.transactions.length, data.watchlist.length]);
 
   // Auto-refresh quotes every 5 minutes
   useEffect(() => {
-    if (!data.apiKey) return;
     const id = setInterval(() => loadQuotes(data), 5 * 60 * 1000);
     return () => clearInterval(id);
-  }, [data.apiKey]);
+  }, []);
 
   const handleRefresh = () => {
     refresh();

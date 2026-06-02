@@ -32,12 +32,18 @@ export default function Settings({ data, onRefresh }: Props) {
     <div className="p-6 max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold">Settings</h1>
 
+      {/* Price source info */}
+      <div className="bg-green-500/5 border border-green-800/40 rounded-xl p-4 text-sm text-green-300">
+        <p className="font-medium mb-1">✓ Live prices work automatically</p>
+        <p className="text-green-400/70">Stock prices are pulled from Yahoo Finance (same data as Apple Stocks & Google Finance) — no setup needed.</p>
+      </div>
+
       {/* API Key */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
         <div>
-          <h2 className="font-semibold mb-1">Finnhub API Key</h2>
+          <h2 className="font-semibold mb-1">Finnhub API Key <span className="text-gray-500 font-normal text-sm">(optional)</span></h2>
           <p className="text-sm text-gray-400">
-            Required for live stock prices. Free tier includes 60 calls/min.
+            Only needed for the News & Research section (analyst ratings, price targets, news feed).
           </p>
         </div>
         <a
