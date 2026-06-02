@@ -1,21 +1,36 @@
 import { supabase } from './supabase';
 import type { AppData } from '../types';
 
-export async function loadFromCloud(userId: string): Promise<AppData | null> {
+async function getToken(): Promise<string | null> {
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('user_data')
-    .select('data')
-    .eq('user_id', userId)
-    .single();
-  if (error || !data) return null;
-  return data.data as AppData;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }
 
-export async function saveToCloud(userId: string, appData: AppData): Promise<void> {
-  if (!supabase) return;
-  await supabase.from('user_data').upsert(
-    { user_id: userId, data: appData, updated_at: new Date().toISOString() },
-    { onConflict: 'user_id' }
-  );
+export async function loadFromCloud(): Promise<AppData | null> {
+  const token = await getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch('/.netlify/functions/user-data', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    return json.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveToCloud(appData: AppData): Promise<void> {
+  const token = await getToken();
+  if (!token) return;
+  try {
+    await fetch('/.netlify/functions/user-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ appData }),
+    });
+  } catch {
+    // silent fail — local data is still saved
+  }
 }

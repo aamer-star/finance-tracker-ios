@@ -34,17 +34,17 @@ export default function App() {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) syncFromCloud(session.user.id);
+      if (session?.user) syncFromCloud();
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) syncFromCloud(session.user.id);
+      if (session?.user) syncFromCloud();
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  const syncFromCloud = async (userId: string) => {
-    const cloudData = await loadFromCloud(userId);
+  const syncFromCloud = async () => {
+    const cloudData = await loadFromCloud();
     if (cloudData) {
       saveData(cloudData);
       setData(cloudData);
@@ -54,10 +54,9 @@ export default function App() {
   const refresh = useCallback(() => {
     const d = loadData();
     setData(d);
-    // Debounced cloud sync on any data change
     if (user) {
       if (syncTimer.current) clearTimeout(syncTimer.current);
-      syncTimer.current = setTimeout(() => saveToCloud(user.id, d), 1500);
+      syncTimer.current = setTimeout(() => saveToCloud(d), 1500);
     }
   }, [user]);
 
