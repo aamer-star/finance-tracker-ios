@@ -5,7 +5,6 @@ function normalizeHeader(h: string): string {
   return h.toLowerCase().replace(/[\s_\-().#\/]/g, '');
 }
 
-// Exact normalized match first, then contains match
 function detectColumn(headers: string[], candidates: string[]): string | null {
   const normalized = headers.map((h) => ({ original: h, norm: normalizeHeader(h) }));
 
@@ -19,18 +18,31 @@ function detectColumn(headers: string[], candidates: string[]): string | null {
   // Pass 2: header contains the candidate string
   for (const c of candidates) {
     const cn = normalizeHeader(c);
+    if (cn.length < 2) continue;
     const found = normalized.find((h) => h.norm.includes(cn));
     if (found) return found.original;
   }
 
-  // Pass 3: candidate contains the header string (short headers like "qty")
+  // Pass 3: candidate contains the header string (short headers like "pp", "qty")
   for (const c of candidates) {
     const cn = normalizeHeader(c);
-    const found = normalized.find((h) => h.norm.length >= 3 && cn.includes(h.norm));
+    const found = normalized.find((h) => h.norm.length >= 2 && cn.includes(h.norm));
     if (found) return found.original;
   }
 
   return null;
+}
+
+// Strip exchange prefix: "NYSE: ORCL" → "ORCL", "NASDAQ: NVDA" → "NVDA"
+function parseTicker(raw: string): string {
+  const s = raw.toUpperCase().trim();
+  // Handle "EXCHANGE: TICKER" format
+  const colonIdx = s.lastIndexOf(':');
+  if (colonIdx !== -1) {
+    const after = s.slice(colonIdx + 1).replace(/[^A-Z0-9.]/g, '').trim();
+    if (after.length >= 1 && after.length <= 6) return after;
+  }
+  return s.replace(/[^A-Z0-9.]/g, '');
 }
 
 function parseDate(raw: unknown): string {
@@ -57,23 +69,24 @@ function parseAction(raw: unknown): Action {
 const TICKER_CANDIDATES = [
   'ticker', 'symbol', 'stock', 'security', 'instrument',
   'tickersymbol', 'stocksymbol', 'securitysymbol', 'stockticker',
-  'equity', 'asset', 'holding', 'name', 'description', 'issuer',
+  'equity', 'asset', 'holding', 'description', 'issuer',
   'securityname', 'securitydescription', 'stockname', 'company',
 ];
 
 const SHARES_CANDIDATES = [
   'shares', 'qty', 'quantity', 'units', 'numshares', 'numberofshares',
-  'sharesowned', 'sharesheld', 'sharecount', 'position', 'amount',
+  'sharesowned', 'sharesheld', 'sharecount', 'position',
   'nosofshares', 'noshares', 'sharesquantity', 'lotquantity',
 ];
 
+// PP = purchase price (common shorthand), CP = cost price
 const PRICE_CANDIDATES = [
-  'price', 'purchaseprice', 'buyprice', 'cost', 'avgcost', 'averagecost',
+  'pp', 'purchaseprice', 'buyprice', 'cost', 'avgcost', 'averagecost',
   'costbasis', 'costpershare', 'unitcost', 'shareprice', 'avgprice',
   'averageprice', 'purchasepricepershare', 'costbasispershare',
   'avgcostbasis', 'averagecostbasis', 'entryprice', 'openprice',
   'pricepershare', 'priceperunit', 'unitprice', 'acquiredprice',
-  'openingprice', 'basispershare',
+  'openingprice', 'basispershare', 'price',
 ];
 
 const DATE_CANDIDATES = [
@@ -87,7 +100,7 @@ const DATE_CANDIDATES = [
 const ACTION_CANDIDATES = [
   'action', 'type', 'transactiontype', 'side', 'ordertype',
   'activity', 'activitytype', 'transaction', 'buysell', 'direction',
-  'transcode', 'transtype', 'description', 'orderaction',
+  'transcode', 'transtype', 'orderaction',
 ];
 
 const ACCOUNT_CANDIDATES = [
@@ -95,6 +108,22 @@ const ACCOUNT_CANDIDATES = [
   'accounttype', 'brokerageaccount', 'portfolioname', 'accountid',
   'fund', 'wallet', 'custodian',
 ];
+
+// Find the row index that looks like actual column headers
+// (skips section label rows like "Equity", "Cash", etc.)
+function findHeaderRowIndex(allRows: unknown[][]): number {
+  for (let i = 0; i < Math.min(allRows.length, 6); i++) {
+    const row = allRows[i];
+    const cells = row.map((c) => normalizeHeader(String(c ?? '')));
+    const hasKnownCol = [
+      ...TICKER_CANDIDATES, ...SHARES_CANDIDATES, ...PRICE_CANDIDATES,
+    ].some((candidate) =>
+      cells.some((cell) => cell === normalizeHeader(candidate) || cell.includes(normalizeHeader(candidate)))
+    );
+    if (hasKnownCol) return i;
+  }
+  return 0;
+}
 
 export interface ParseResult {
   transactions: Transaction[];
@@ -110,14 +139,17 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const wb = XLSX.read(data, { type: 'array', cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-        if (!rows.length) {
+        // Read as raw array to find the real header row
+        const allRows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (!allRows.length) {
           resolve({ transactions: [], errors: ['Sheet is empty'], detectedColumns: {} });
           return;
         }
 
-        const headers = Object.keys(rows[0]);
+        const headerRowIdx = findHeaderRowIndex(allRows);
+        const headers = (allRows[headerRowIdx] as unknown[]).map((h) => String(h ?? '').trim()).filter(Boolean);
+        const dataRows = allRows.slice(headerRowIdx + 1);
 
         const tickerCol  = detectColumn(headers, TICKER_CANDIDATES);
         const sharesCol  = detectColumn(headers, SHARES_CANDIDATES);
@@ -135,27 +167,36 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         if (accountCol) detectedColumns['Account'] = accountCol;
 
         const errors: string[] = [];
-        if (!tickerCol) errors.push(`Could not find ticker column. Headers found: ${headers.join(', ')}`);
-        if (!sharesCol) errors.push(`Could not find shares/quantity column. Headers found: ${headers.join(', ')}`);
-        if (!priceCol)  errors.push(`Could not find price column. Headers found: ${headers.join(', ')}`);
+        if (!tickerCol) errors.push(`Could not find ticker column. Headers: ${headers.join(', ')}`);
+        if (!sharesCol) errors.push(`Could not find shares/quantity column. Headers: ${headers.join(', ')}`);
+        if (!priceCol)  errors.push(`Could not find price column. Headers: ${headers.join(', ')}`);
 
         if (errors.length) {
           resolve({ transactions: [], errors, detectedColumns });
           return;
         }
 
+        const tickerIdx  = headers.indexOf(tickerCol!);
+        const sharesIdx  = headers.indexOf(sharesCol!);
+        const priceIdx   = headers.indexOf(priceCol!);
+        const dateIdx    = dateCol    ? headers.indexOf(dateCol)    : -1;
+        const actionIdx  = actionCol  ? headers.indexOf(actionCol)  : -1;
+        const accountIdx = accountCol ? headers.indexOf(accountCol) : -1;
+
         const transactions: Transaction[] = [];
-        rows.forEach((row, idx) => {
-          const ticker = String(row[tickerCol!] || '').toUpperCase().trim().replace(/[^A-Z0-9.]/g, '');
-          const shares = parseFloat(String(row[sharesCol!] || '0').replace(/[$,\s]/g, ''));
-          const price  = parseFloat(String(row[priceCol!]  || '0').replace(/[$,\s]/g, ''));
 
-          if (!ticker || isNaN(shares) || shares <= 0 || isNaN(price) || price <= 0) return;
+        dataRows.forEach((row, idx) => {
+          const rawTicker = String((row as unknown[])[tickerIdx] ?? '').trim();
+          const ticker = parseTicker(rawTicker);
+          const shares = parseFloat(String((row as unknown[])[sharesIdx] ?? '0').replace(/[$,\s]/g, ''));
+          const price  = parseFloat(String((row as unknown[])[priceIdx]  ?? '0').replace(/[$,\s]/g, ''));
 
-          const date   = dateCol   ? parseDate(row[dateCol])     : new Date().toISOString().slice(0, 10);
-          const action = actionCol ? parseAction(row[actionCol]) : 'BUY';
-          const account = accountCol
-            ? String(row[accountCol] || defaultAccount).trim() || defaultAccount
+          if (!ticker || ticker.length < 1 || isNaN(shares) || shares <= 0 || isNaN(price) || price <= 0) return;
+
+          const date   = dateIdx   >= 0 ? parseDate((row as unknown[])[dateIdx])          : new Date().toISOString().slice(0, 10);
+          const action = actionIdx >= 0 ? parseAction((row as unknown[])[actionIdx])      : 'BUY';
+          const account = accountIdx >= 0
+            ? String((row as unknown[])[accountIdx] || defaultAccount).trim() || defaultAccount
             : defaultAccount;
 
           transactions.push({

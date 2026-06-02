@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, ArrowLeftRight, BarChart2,
-  Receipt, Star, Settings, TrendingUp, Newspaper,
+  Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 const nav = [
@@ -16,37 +17,60 @@ const nav = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100">
       {/* Sidebar */}
-      <aside className="w-56 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
-        <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-800">
-          <TrendingUp className="text-green-400" size={22} />
-          <span className="font-bold text-white text-base">Finance Tracker</span>
+      <aside
+        className={`bg-gray-900 border-r border-gray-800 flex flex-col shrink-0 transition-all duration-200 ${
+          collapsed ? 'w-14' : 'w-56'
+        }`}
+      >
+        {/* Logo row */}
+        <div className={`flex items-center border-b border-gray-800 h-14 ${collapsed ? 'justify-center px-0' : 'px-4 gap-2'}`}>
+          {!collapsed && (
+            <>
+              <TrendingUp className="text-green-400 shrink-0" size={20} />
+              <span className="font-bold text-white text-sm truncate">Finance Tracker</span>
+            </>
+          )}
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className={`text-gray-500 hover:text-white transition-colors ${collapsed ? '' : 'ml-auto'}`}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
         </div>
-        <nav className="flex-1 py-4 space-y-0.5 px-2">
+
+        {/* Nav items */}
+        <nav className="flex-1 py-3 space-y-0.5 px-1.5 overflow-y-auto">
           {nav.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                `flex items-center rounded-lg text-sm transition-colors ${
+                  collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+                } ${
                   isActive
                     ? 'bg-green-500/10 text-green-400 font-medium'
                     : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
                 }`
               }
             >
-              <Icon size={17} />
-              {label}
+              <Icon size={17} className="shrink-0" />
+              {!collapsed && <span className="truncate">{label}</span>}
             </NavLink>
           ))}
         </nav>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto min-w-0">{children}</main>
     </div>
   );
 }
