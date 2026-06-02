@@ -190,7 +190,7 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
               {filteredWatchlist.map(ticker => {
                 const q = quotes[ticker];
                 return (
-                  <tr key={ticker} className="border-b border-gray-800/50 hover:bg-gray-800/30 group">
+                  <tr key={ticker} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                     <td className="px-5 py-3 font-bold text-white">{ticker}</td>
                     <td className="px-5 py-3 text-gray-400 text-sm max-w-[180px] truncate">
                       {q?.name ?? <span className="text-gray-700">—</span>}
@@ -211,7 +211,7 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
                       <button
                         onClick={() => remove(ticker)}
                         title={`Remove ${ticker}`}
-                        className="flex items-center gap-1 text-xs text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 ml-auto"
+                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors px-2 py-1 rounded-lg ml-auto"
                       >
                         <Trash2 size={13} /> Remove
                       </button>
