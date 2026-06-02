@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { CalendarDays, TrendingUp, DollarSign, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { CalendarDays, TrendingUp, DollarSign, AlertCircle, Clock, RefreshCw, Key } from 'lucide-react';
 import { computeHoldings } from '../utils/portfolio';
 import type { AppData, StockQuote } from '../types';
 
@@ -13,8 +13,6 @@ interface CalEvent {
   date: Date;
   type: 'earnings' | 'exdividend';
   epsEstimate?: number;
-  epsLow?: number;
-  epsHigh?: number;
   revenueEstimate?: number;
 }
 
@@ -117,30 +115,52 @@ function MiniCalendar({ events }: { events: CalEvent[] }) {
   );
 }
 
-export default function CalendarPage({ data }: Props) {
+export default function CalendarPage({ data, quotes }: Props) {
   const holdings = computeHoldings(data.transactions);
   const tickers = useMemo(() => holdings.map(h => h.ticker), [holdings]);
 
-  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [earningsEvents, setEarningsEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
+  const [noKey, setNoKey] = useState(false);
+
+  // Ex-dividend dates come from the quotes already fetched by the app
+  const dividendEvents = useMemo<CalEvent[]>(() => {
+    const cutoffSecs = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+    return tickers.flatMap(ticker => {
+      const q = quotes[ticker];
+      if (!q?.dividendDate || q.dividendDate < cutoffSecs) return [];
+      return [{ ticker, date: new Date(q.dividendDate * 1000), type: 'exdividend' as const }];
+    });
+  }, [tickers, quotes]);
+
+  const events = useMemo(
+    () => [...earningsEvents, ...dividendEvents].sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [earningsEvents, dividendEvents]
+  );
 
   const load = async () => {
     if (!tickers.length) return;
     setLoading(true);
+    setNoKey(false);
     try {
       const res = await fetch('/.netlify/functions/calendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers }),
+        body: JSON.stringify({ tickers, apiKey: data.apiKey }),
       });
       const json = await res.json();
-      setEvents(
-        (json.events ?? []).map((e: { ticker: string; date: number; type: string; epsEstimate?: number; epsLow?: number; epsHigh?: number; revenueEstimate?: number }) => ({
-          ...e,
-          date: new Date(e.date * 1000),
-        }))
-      );
+      if (json.noKey) {
+        setNoKey(true);
+        setEarningsEvents([]);
+      } else {
+        setEarningsEvents(
+          (json.events ?? []).map((e: { ticker: string; date: number; type: string; epsEstimate?: number; revenueEstimate?: number }) => ({
+            ...e,
+            date: new Date(e.date * 1000),
+          }))
+        );
+      }
     } catch {
       // silent
     }
@@ -148,7 +168,7 @@ export default function CalendarPage({ data }: Props) {
     setFetched(true);
   };
 
-  useEffect(() => { load(); }, [tickers.join(',')]);
+  useEffect(() => { load(); }, [tickers.join(','), data.apiKey]);
 
   const groups = groupEvents(events);
   const earningsCount = events.filter(e => e.type === 'earnings' && daysUntil(e.date) >= 0).length;
@@ -186,6 +206,18 @@ export default function CalendarPage({ data }: Props) {
       ) : (
         <div className="grid md:grid-cols-[1fr_220px] gap-5">
           <div className="space-y-5 min-w-0">
+            {noKey && (
+              <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-700/40 rounded-xl px-4 py-3 text-sm">
+                <Key size={15} className="text-amber-400 mt-0.5 shrink-0" />
+                <div>
+                  <div className="text-amber-300 font-medium">Finnhub API key required for earnings</div>
+                  <div className="text-gray-500 text-xs mt-0.5">
+                    Go to <span className="text-gray-300">Settings → Finnhub API Key</span> and add your free key from finnhub.io to see earnings dates.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 flex-wrap">
               {earningsCount > 0 && (
                 <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-800/50 text-blue-300 text-xs px-3 py-1.5 rounded-full">
@@ -197,10 +229,10 @@ export default function CalendarPage({ data }: Props) {
                   <DollarSign size={11} /> {dividendCount} upcoming ex-dividend
                 </div>
               )}
-              {fetched && events.length === 0 && (
+              {fetched && events.length === 0 && !noKey && (
                 <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
                   <AlertCircle size={14} />
-                  No upcoming events found — Yahoo Finance may not have next quarter's dates scheduled yet.
+                  No upcoming events found — Finnhub may not have next quarter's dates scheduled yet.
                 </div>
               )}
             </div>
@@ -246,12 +278,7 @@ export default function CalendarPage({ data }: Props) {
                               {e.epsEstimate != null && (
                                 <div>
                                   <div className="text-gray-500">EPS Est.</div>
-                                  <div className="text-gray-200 font-medium">
-                                    ${e.epsEstimate.toFixed(2)}
-                                    {e.epsLow != null && e.epsHigh != null && (
-                                      <span className="text-gray-500 font-normal"> (${e.epsLow.toFixed(2)}–${e.epsHigh.toFixed(2)})</span>
-                                    )}
-                                  </div>
+                                  <div className="text-gray-200 font-medium">${e.epsEstimate.toFixed(2)}</div>
                                 </div>
                               )}
                               {e.revenueEstimate != null && (
