@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Transactions from './pages/Transactions';
 import Analytics from './pages/Analytics';
+import Chat from './pages/Chat';
 import News from './pages/News';
 import TaxSummary from './pages/TaxSummary';
 import Watchlist from './pages/Watchlist';
@@ -142,6 +143,10 @@ export default function App() {
                 onFetchQuote={fetchSingleQuote}
               />
             }
+          />
+          <Route
+            path="/chat"
+            element={<Chat data={data} quotes={quotes} />}
           />
           <Route
             path="/settings"

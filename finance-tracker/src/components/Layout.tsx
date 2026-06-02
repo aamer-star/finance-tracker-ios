@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, ArrowLeftRight, BarChart2,
-  Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight,
+  Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight, MessageSquare,
 } from 'lucide-react';
 
 const nav = [
@@ -13,6 +13,7 @@ const nav = [
   { to: '/news', icon: Newspaper, label: 'News & Research' },
   { to: '/tax', icon: Receipt, label: 'Tax Summary' },
   { to: '/watchlist', icon: Star, label: 'Watchlist' },
+  { to: '/chat', icon: MessageSquare, label: 'AI Assistant' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
