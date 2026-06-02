@@ -25,6 +25,7 @@ async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Stock
       const earningsTs = (item.earningsTimestamp ?? item.earningsTimestampStart) as number | undefined;
       const quote: StockQuote = {
         ticker,
+        name: String(item.shortName ?? item.longName ?? ''),
         price: Number(item.regularMarketPrice ?? 0),
         change: Number(item.regularMarketChange ?? 0),
         changePercent: Number(item.regularMarketChangePercent ?? 0),
@@ -100,6 +101,39 @@ export async function fetchAllQuotes(
   }
 
   return results;
+}
+
+// ─── Stock Search (no key needed, uses Yahoo Finance) ────────────────────────
+
+export interface StockSearchResult {
+  ticker: string;
+  name: string;
+  exchange: string;
+}
+
+export async function searchStocks(query: string): Promise<StockSearchResult[]> {
+  if (!query.trim()) return [];
+  try {
+    const yahooUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0&enableFuzzyQuery=false`;
+    const url = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return ((json.quotes ?? []) as Record<string, unknown>[])
+      .filter(q =>
+        (q.quoteType === 'EQUITY' || q.typeDisp === 'Equity') &&
+        q.symbol &&
+        !String(q.symbol).includes('.')
+      )
+      .map(q => ({
+        ticker: String(q.symbol),
+        name: String(q.shortname ?? q.longname ?? q.symbol),
+        exchange: String(q.exchange ?? ''),
+      }))
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
 }
 
 // ─── News (requires Finnhub key) ─────────────────────────────────────────────
