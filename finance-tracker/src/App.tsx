@@ -74,11 +74,18 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
-  const handleAuthSuccess = (newUser: AuthUser) => {
+  const handleAuthSuccess = async (newUser: AuthUser) => {
     setUser(newUser);
-    loadFromCloud().then((cloudData) => {
-      if (cloudData) { saveData(cloudData); setData(cloudData); }
-    });
+    const cloudData = await loadFromCloud();
+    if (cloudData && cloudData.transactions.length > 0) {
+      // Cloud has data — load it onto this device
+      saveData(cloudData);
+      setData(cloudData);
+    } else {
+      // Cloud is empty — push this device's local data up
+      const local = loadData();
+      if (local.transactions.length > 0) await saveToCloud(local);
+    }
   };
 
   const handleSignOut = () => {
