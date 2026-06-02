@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Transactions from './pages/Transactions';
 import Analytics from './pages/Analytics';
+import News from './pages/News';
 import TaxSummary from './pages/TaxSummary';
 import Watchlist from './pages/Watchlist';
 import Settings from './pages/Settings';
@@ -123,6 +124,10 @@ export default function App() {
           <Route
             path="/analytics"
             element={<Analytics data={data} quotes={quotes} selectedAccount={selectedAccount} />}
+          />
+          <Route
+            path="/news"
+            element={<News data={data} quotes={quotes} />}
           />
           <Route
             path="/tax"

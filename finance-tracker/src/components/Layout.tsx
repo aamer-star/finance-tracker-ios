@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, ArrowLeftRight, BarChart2,
-  Receipt, Star, Settings, TrendingUp,
+  Receipt, Star, Settings, TrendingUp, Newspaper,
 } from 'lucide-react';
 
 const nav = [
@@ -9,6 +9,7 @@ const nav = [
   { to: '/portfolio', icon: Briefcase, label: 'Portfolio' },
   { to: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
   { to: '/analytics', icon: BarChart2, label: 'Analytics' },
+  { to: '/news', icon: Newspaper, label: 'News & Research' },
   { to: '/tax', icon: Receipt, label: 'Tax Summary' },
   { to: '/watchlist', icon: Star, label: 'Watchlist' },
   { to: '/settings', icon: Settings, label: 'Settings' },
