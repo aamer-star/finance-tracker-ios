@@ -97,7 +97,8 @@ export default function App() {
     setData(emptyData());
   };
 
-  const allAccounts = ['All', ...data.accounts];
+  const activeAccounts = data.accounts.filter(a => data.transactions.some(t => t.account === a));
+  const allAccounts = activeAccounts.length > 1 ? ['All', ...activeAccounts] : [];
 
   return (
     <BrowserRouter>
