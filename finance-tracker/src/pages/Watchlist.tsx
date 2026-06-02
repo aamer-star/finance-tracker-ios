@@ -26,7 +26,6 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Debounced search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim()) { setResults([]); setDropdownOpen(false); return; }
@@ -40,7 +39,6 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -68,12 +66,11 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      // If exact ticker match in results, add it; otherwise add raw input as ticker
       const exact = results.find(r => r.ticker === query.toUpperCase().trim());
       if (exact) addTicker(exact.ticker);
       else if (query.trim()) addTicker(query.trim());
     }
-    if (e.key === 'Escape') { setDropdownOpen(false); }
+    if (e.key === 'Escape') setDropdownOpen(false);
   };
 
   const remove = (ticker: string) => {
@@ -85,19 +82,18 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
 
   const filteredWatchlist = data.watchlist.filter(ticker => {
     if (!filterText.trim()) return true;
-    const q = filterText.toLowerCase();
-    const name = (quotes[ticker]?.name ?? '').toLowerCase();
-    return ticker.toLowerCase().includes(q) || name.includes(q);
+    const f = filterText.toLowerCase();
+    return ticker.toLowerCase().includes(f) || (quotes[ticker]?.name ?? '').toLowerCase().includes(f);
   });
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 md:p-6 space-y-4">
       <h1 className="text-2xl font-bold flex items-center gap-2">
         <Star size={22} className="text-yellow-400" /> Watchlist
       </h1>
 
-      {/* Add by name or ticker */}
-      <div ref={containerRef} className="relative max-w-sm">
+      {/* Search / add input */}
+      <div ref={containerRef} className="relative">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
@@ -106,8 +102,8 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => results.length > 0 && setDropdownOpen(true)}
-              placeholder="Search by name or ticker…"
-              className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-green-500/50"
+              placeholder="Search by company name or ticker…"
+              className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-3 text-sm placeholder-gray-600 focus:outline-none focus:border-green-500/50"
             />
             {searching && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
@@ -115,7 +111,7 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
           </div>
           <button
             onClick={() => query.trim() && addTicker(query.trim())}
-            className="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-black font-medium px-4 py-2.5 rounded-xl text-sm transition-colors shrink-0"
+            className="flex items-center gap-1.5 bg-green-500 active:bg-green-700 text-black font-semibold px-4 py-3 rounded-xl text-sm transition-colors shrink-0"
           >
             <Plus size={15} /> Add
           </button>
@@ -129,12 +125,10 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
               return (
                 <button
                   key={r.ticker}
-                  onClick={() => addTicker(r.ticker)}
+                  onMouseDown={e => { e.preventDefault(); if (!alreadyAdded) addTicker(r.ticker); }}
                   disabled={alreadyAdded}
-                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                    alreadyAdded
-                      ? 'opacity-40 cursor-not-allowed'
-                      : 'hover:bg-gray-800'
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-sm transition-colors ${
+                    alreadyAdded ? 'opacity-40' : 'active:bg-gray-800'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -152,77 +146,70 @@ export default function Watchlist({ data, quotes, quotesLoading, onRefresh, onFe
         )}
       </div>
 
-      {/* Filter existing watchlist */}
-      {data.watchlist.length > 3 && (
-        <div className="relative max-w-xs">
+      {/* Filter bar — shown when list is long enough to be worth filtering */}
+      {data.watchlist.length > 4 && (
+        <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
           <input
             value={filterText}
             onChange={e => setFilterText(e.target.value)}
             placeholder="Filter watchlist…"
-            className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-8 pr-4 py-2 text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600"
+            className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-8 pr-4 py-2.5 text-sm placeholder-gray-600 focus:outline-none focus:border-gray-600"
           />
         </div>
       )}
 
-      {data.watchlist.length === 0 ? (
+      {/* Empty states */}
+      {data.watchlist.length === 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center text-gray-500">
           <Star size={32} className="mx-auto mb-3 opacity-20" />
-          <p className="text-sm">Search for a stock above to add it to your watchlist.</p>
-        </div>
-      ) : filteredWatchlist.length === 0 ? (
-        <p className="text-gray-500 text-sm">No watchlist items match "{filterText}".</p>
-      ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-gray-500 text-xs uppercase border-b border-gray-800">
-                <th className="text-left px-5 py-3">Ticker</th>
-                <th className="text-left px-5 py-3">Company</th>
-                <th className="text-right px-5 py-3">Price</th>
-                <th className="text-right px-5 py-3">Change</th>
-                <th className="text-right px-5 py-3">Change %</th>
-                <th className="text-right px-5 py-3">Prev Close</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {filteredWatchlist.map(ticker => {
-                const q = quotes[ticker];
-                return (
-                  <tr key={ticker} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="px-5 py-3 font-bold text-white">{ticker}</td>
-                    <td className="px-5 py-3 text-gray-400 text-sm max-w-[180px] truncate">
-                      {q?.name ?? <span className="text-gray-700">—</span>}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-300">
-                      {quotesLoading || !q ? <span className="text-gray-600">...</span> : fmt(q.price)}
-                    </td>
-                    <td className={`px-5 py-3 text-right font-medium ${!q ? 'text-gray-600' : q.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {!q ? '—' : `${q.change >= 0 ? '+' : ''}${fmt(q.change)}`}
-                    </td>
-                    <td className={`px-5 py-3 text-right font-medium ${!q ? 'text-gray-600' : q.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {!q ? '—' : `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(2)}%`}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-400">
-                      {!q ? '—' : fmt(q.previousClose)}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={() => remove(ticker)}
-                        title={`Remove ${ticker}`}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors px-2 py-1 rounded-lg ml-auto"
-                      >
-                        <Trash2 size={13} /> Remove
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <p className="text-sm">Search for a company above to add it to your watchlist.</p>
         </div>
       )}
+
+      {data.watchlist.length > 0 && filteredWatchlist.length === 0 && (
+        <p className="text-gray-500 text-sm">No results for "{filterText}".</p>
+      )}
+
+      {/* Stock cards — mobile-friendly, no table */}
+      <div className="space-y-2">
+        {filteredWatchlist.map(ticker => {
+          const q = quotes[ticker];
+          const positive = (q?.changePercent ?? 0) >= 0;
+          return (
+            <div key={ticker} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center gap-3">
+              {/* Left: ticker + name */}
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-white text-base leading-tight">{ticker}</div>
+                {q?.name && (
+                  <div className="text-xs text-gray-500 truncate mt-0.5">{q.name}</div>
+                )}
+              </div>
+
+              {/* Center: price + change */}
+              <div className="text-right shrink-0">
+                <div className="font-semibold text-white">
+                  {quotesLoading || !q ? <span className="text-gray-600 text-sm">Loading…</span> : fmt(q.price)}
+                </div>
+                {q && (
+                  <div className={`text-xs font-medium ${positive ? 'text-green-400' : 'text-red-400'}`}>
+                    {positive ? '+' : ''}{fmt(q.change)} ({positive ? '+' : ''}{q.changePercent.toFixed(2)}%)
+                  </div>
+                )}
+              </div>
+
+              {/* Right: remove button — always visible, big enough to tap */}
+              <button
+                onPointerDown={() => remove(ticker)}
+                className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-red-500/10 text-red-400 active:bg-red-500/30 transition-colors"
+                aria-label={`Remove ${ticker}`}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
