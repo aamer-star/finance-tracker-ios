@@ -126,14 +126,20 @@ export function computePortfolioOverTime(transactions: Transaction[]): Portfolio
 export function computeTotalNetProfit(
   holdings: Holding[],
   quotes: Record<string, number>,
-  realizedGains: RealizedGain[]
+  realizedGains: RealizedGain[],
+  snapshotPrices: Record<string, number> = {},
+  importedRealizedGains = 0
 ): { unrealized: number; realized: number; total: number } {
   const unrealized = holdings.reduce((sum, h) => {
-    const price = quotes[h.ticker] ?? h.avgCostBasis;
+    // Priority: live price → snapshot price from sheet → avg cost (no gain)
+    const price = quotes[h.ticker] ?? snapshotPrices[h.ticker] ?? h.avgCostBasis;
     return sum + h.shares * (price - h.avgCostBasis);
   }, 0);
 
-  const realized = realizedGains.reduce((sum, g) => sum + g.gain, 0);
+  // Use imported realized gains if available, otherwise compute from FIFO transactions
+  const realized = importedRealizedGains > 0
+    ? importedRealizedGains
+    : realizedGains.reduce((sum, g) => sum + g.gain, 0);
 
   return { unrealized, realized, total: unrealized + realized };
 }

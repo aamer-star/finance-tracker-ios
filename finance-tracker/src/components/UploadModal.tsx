@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Upload, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { parseExcel } from '../utils/excelParser';
-import { addTransactions } from '../utils/storage';
+import { addTransactions, mergeSnapshotData } from '../utils/storage';
 import type { AppData } from '../types';
 
 interface Props {
@@ -21,7 +21,7 @@ export default function UploadModal({ onClose, data, onRefresh }: Props) {
   const processFile = async (file: File) => {
     setStatus('parsing');
     const acct = newAccount.trim() || account;
-    const { transactions, errors, detectedColumns } = await parseExcel(file, acct);
+    const { transactions, errors, detectedColumns, importedRealizedGains, snapshotPrices } = await parseExcel(file, acct);
     setDetectedCols(detectedColumns);
     if (errors.length) {
       setStatus('error');
@@ -29,8 +29,9 @@ export default function UploadModal({ onClose, data, onRefresh }: Props) {
       return;
     }
     addTransactions(transactions);
+    mergeSnapshotData(importedRealizedGains, snapshotPrices);
     setStatus('done');
-    setMessage(`Imported ${transactions.length} transaction(s) successfully.`);
+    setMessage(`Imported ${transactions.length} position(s) successfully.`);
     onRefresh();
   };
 

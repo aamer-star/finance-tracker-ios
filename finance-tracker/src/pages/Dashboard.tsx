@@ -41,8 +41,10 @@ export default function Dashboard({ data, quotes, quotesLoading, selectedAccount
     return m;
   }, [quotes]);
 
+  const snapshotPrices = data.snapshotPrices ?? {};
+
   const totalMarketValue = holdings.reduce((sum, h) => {
-    const p = priceMap[h.ticker] ?? h.avgCostBasis;
+    const p = priceMap[h.ticker] ?? snapshotPrices[h.ticker] ?? h.avgCostBasis;
     return sum + h.shares * p;
   }, 0);
 
@@ -54,7 +56,9 @@ export default function Dashboard({ data, quotes, quotesLoading, selectedAccount
     return sum + h.shares * q.change;
   }, 0);
 
-  const { unrealized, realized, total } = computeTotalNetProfit(holdings, priceMap, realizedGains);
+  const { unrealized, realized, total } = computeTotalNetProfit(
+    holdings, priceMap, realizedGains, snapshotPrices, data.realizedGainsFromImport ?? 0
+  );
 
   const overallReturn = totalCost > 0 ? (unrealized / totalCost) * 100 : 0;
 
@@ -148,7 +152,7 @@ export default function Dashboard({ data, quotes, quotesLoading, selectedAccount
             </thead>
             <tbody>
               {holdings.map((h) => {
-                const price = priceMap[h.ticker] ?? h.avgCostBasis;
+                const price = priceMap[h.ticker] ?? snapshotPrices[h.ticker] ?? h.avgCostBasis;
                 const mv = h.shares * price;
                 const gl = mv - h.totalCost;
                 const ret = h.totalCost > 0 ? (gl / h.totalCost) * 100 : 0;

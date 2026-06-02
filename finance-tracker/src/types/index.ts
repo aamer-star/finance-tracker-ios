@@ -51,4 +51,7 @@ export interface AppData {
   watchlist: string[];
   apiKey: string;
   accounts: string[];
+  // Imported directly from spreadsheet when pre-computed values are available
+  realizedGainsFromImport: number;
+  snapshotPrices: Record<string, number>; // ticker → current price from sheet's CP column
 }

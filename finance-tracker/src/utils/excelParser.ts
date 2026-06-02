@@ -134,10 +134,49 @@ function findHeaderRowIndex(allRows: unknown[][]): number {
   return 0;
 }
 
+// Columns for current price (CP) and pre-computed gain
+const CURRENT_PRICE_CANDIDATES = [
+  'cp', 'currentprice', 'marketprice', 'lastprice', 'currentvalue',
+  'last', 'close', 'closingprice', 'marketvalue',
+];
+const GAIN_CANDIDATES = [
+  'capitalgain', 'capitalgainloss', 'gainloss', 'gain', 'unrealizedgain',
+  'unrealizedgainloss', 'profitloss', 'pl', 'pnl',
+];
+
+// Scan all cells for a "Total Realized Gains" label and return the associated number
+function extractTotalRealizedGains(allRows: unknown[][]): number {
+  const LABEL_RE = /total\s*(realized)?\s*(gain|profit|return)/i;
+  for (let i = 0; i < allRows.length; i++) {
+    const row = allRows[i] as unknown[];
+    for (let j = 0; j < row.length; j++) {
+      const cell = String(row[j] ?? '').trim();
+      if (LABEL_RE.test(cell)) {
+        // Look for a number in the same row or the next row
+        for (let k = j + 1; k < row.length; k++) {
+          const v = parseFloat(String(row[k] ?? '').replace(/[$,\s()]/g, ''));
+          if (!isNaN(v) && v > 0) return v;
+        }
+        // Try first numeric cell in the next row
+        if (i + 1 < allRows.length) {
+          const nextRow = allRows[i + 1] as unknown[];
+          for (const c of nextRow) {
+            const v = parseFloat(String(c ?? '').replace(/[$,\s()]/g, ''));
+            if (!isNaN(v) && v > 0) return v;
+          }
+        }
+      }
+    }
+  }
+  return 0;
+}
+
 export interface ParseResult {
   transactions: Transaction[];
   errors: string[];
   detectedColumns: Record<string, string>;
+  importedRealizedGains: number;
+  snapshotPrices: Record<string, number>;
 }
 
 export function parseExcel(file: File, defaultAccount: string): Promise<ParseResult> {
@@ -149,10 +188,9 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         const wb = XLSX.read(data, { type: 'array', cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
 
-        // Read as raw array to find the real header row
         const allRows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         if (!allRows.length) {
-          resolve({ transactions: [], errors: ['Sheet is empty'], detectedColumns: {} });
+          resolve({ transactions: [], errors: ['Sheet is empty'], detectedColumns: {}, importedRealizedGains: 0, snapshotPrices: {} });
           return;
         }
 
@@ -160,20 +198,24 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         const headers = (allRows[headerRowIdx] as unknown[]).map((h) => String(h ?? '').trim()).filter(Boolean);
         const dataRows = allRows.slice(headerRowIdx + 1);
 
-        const tickerCol  = detectColumn(headers, TICKER_CANDIDATES);
-        const sharesCol  = detectColumn(headers, SHARES_CANDIDATES);
-        const priceCol   = detectColumn(headers, PRICE_CANDIDATES);
-        const dateCol    = detectColumn(headers, DATE_CANDIDATES);
-        const actionCol  = detectColumn(headers, ACTION_CANDIDATES);
-        const accountCol = detectColumn(headers, ACCOUNT_CANDIDATES);
+        const tickerCol       = detectColumn(headers, TICKER_CANDIDATES);
+        const sharesCol       = detectColumn(headers, SHARES_CANDIDATES);
+        const priceCol        = detectColumn(headers, PRICE_CANDIDATES);
+        const dateCol         = detectColumn(headers, DATE_CANDIDATES);
+        const actionCol       = detectColumn(headers, ACTION_CANDIDATES);
+        const accountCol      = detectColumn(headers, ACCOUNT_CANDIDATES);
+        const currentPriceCol = detectColumn(headers, CURRENT_PRICE_CANDIDATES);
+        const gainCol         = detectColumn(headers, GAIN_CANDIDATES);
 
         const detectedColumns: Record<string, string> = {};
-        if (tickerCol)  detectedColumns['Ticker']  = tickerCol;
-        if (sharesCol)  detectedColumns['Shares']  = sharesCol;
-        if (priceCol)   detectedColumns['Price']   = priceCol;
-        if (dateCol)    detectedColumns['Date']    = dateCol;
-        if (actionCol)  detectedColumns['Action']  = actionCol;
-        if (accountCol) detectedColumns['Account'] = accountCol;
+        if (tickerCol)       detectedColumns['Ticker']          = tickerCol;
+        if (sharesCol)       detectedColumns['Shares']          = sharesCol;
+        if (priceCol)        detectedColumns['Purchase Price']  = priceCol;
+        if (currentPriceCol) detectedColumns['Current Price']   = currentPriceCol;
+        if (gainCol)         detectedColumns['Gain/Loss']       = gainCol;
+        if (dateCol)         detectedColumns['Date']            = dateCol;
+        if (actionCol)       detectedColumns['Action']          = actionCol;
+        if (accountCol)      detectedColumns['Account']         = accountCol;
 
         const errors: string[] = [];
         if (!tickerCol) errors.push(`Could not find ticker column. Headers: ${headers.join(', ')}`);
@@ -181,31 +223,40 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         if (!priceCol)  errors.push(`Could not find price column. Headers: ${headers.join(', ')}`);
 
         if (errors.length) {
-          resolve({ transactions: [], errors, detectedColumns });
+          resolve({ transactions: [], errors, detectedColumns, importedRealizedGains: 0, snapshotPrices: {} });
           return;
         }
 
-        const tickerIdx  = headers.indexOf(tickerCol!);
-        const sharesIdx  = headers.indexOf(sharesCol!);
-        const priceIdx   = headers.indexOf(priceCol!);
-        const dateIdx    = dateCol    ? headers.indexOf(dateCol)    : -1;
-        const actionIdx  = actionCol  ? headers.indexOf(actionCol)  : -1;
-        const accountIdx = accountCol ? headers.indexOf(accountCol) : -1;
+        const tickerIdx       = headers.indexOf(tickerCol!);
+        const sharesIdx       = headers.indexOf(sharesCol!);
+        const priceIdx        = headers.indexOf(priceCol!);
+        const dateIdx         = dateCol         ? headers.indexOf(dateCol)         : -1;
+        const actionIdx       = actionCol       ? headers.indexOf(actionCol)       : -1;
+        const accountIdx      = accountCol      ? headers.indexOf(accountCol)      : -1;
+        const currentPriceIdx = currentPriceCol ? headers.indexOf(currentPriceCol) : -1;
 
         const transactions: Transaction[] = [];
+        const snapshotPrices: Record<string, number> = {};
 
         dataRows.forEach((row, idx) => {
-          const rawTicker = String((row as unknown[])[tickerIdx] ?? '').trim();
+          const r = row as unknown[];
+          const rawTicker = String(r[tickerIdx] ?? '').trim();
           const ticker = parseTicker(rawTicker);
-          const shares = parseFloat(String((row as unknown[])[sharesIdx] ?? '0').replace(/[$,\s]/g, ''));
-          const price  = parseFloat(String((row as unknown[])[priceIdx]  ?? '0').replace(/[$,\s]/g, ''));
+          const shares = parseFloat(String(r[sharesIdx] ?? '0').replace(/[$,\s]/g, ''));
+          const price  = parseFloat(String(r[priceIdx]  ?? '0').replace(/[$,\s]/g, ''));
 
           if (!ticker || ticker.length < 1 || isNaN(shares) || shares <= 0 || isNaN(price) || price <= 0) return;
 
-          const date   = dateIdx   >= 0 ? parseDate((row as unknown[])[dateIdx])          : new Date().toISOString().slice(0, 10);
-          const action = actionIdx >= 0 ? parseAction((row as unknown[])[actionIdx])      : 'BUY';
+          // Store snapshot current price (CP column) keyed by ticker
+          if (currentPriceIdx >= 0) {
+            const cp = parseFloat(String(r[currentPriceIdx] ?? '').replace(/[$,\s]/g, ''));
+            if (!isNaN(cp) && cp > 0) snapshotPrices[ticker] = cp;
+          }
+
+          const date    = dateIdx    >= 0 ? parseDate(r[dateIdx])    : new Date().toISOString().slice(0, 10);
+          const action  = actionIdx  >= 0 ? parseAction(r[actionIdx]): 'BUY';
           const account = accountIdx >= 0
-            ? String((row as unknown[])[accountIdx] || defaultAccount).trim() || defaultAccount
+            ? String(r[accountIdx] || defaultAccount).trim() || defaultAccount
             : defaultAccount;
 
           transactions.push({
@@ -219,39 +270,15 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
           });
         });
 
-        // Second pass: scan ALL rows for narrative sell descriptions like
-        // "Sale of 578 shares of TSLA at $261.64/share"
-        const SALE_RE = /sale\s+of\s+([\d,]+)\s+shares?\s+of\s+([A-Z0-9.]+)\s+at\s+\$?([\d.]+)/i;
-        const existingIds = new Set(transactions.map((t) => t.id));
+        // Extract pre-computed total realized gains from the sheet
+        const importedRealizedGains = extractTotalRealizedGains(allRows);
+        if (importedRealizedGains > 0) {
+          detectedColumns['Realized Gains'] = `$${importedRealizedGains.toLocaleString()} (imported)`;
+        }
 
-        allRows.forEach((row, rowIdx) => {
-          (row as unknown[]).forEach((cell) => {
-            const text = String(cell ?? '').trim();
-            const m = text.match(SALE_RE);
-            if (!m) return;
-            const shares = parseFloat(m[1].replace(/,/g, ''));
-            const ticker = m[2].toUpperCase();
-            const price  = parseFloat(m[3]);
-            if (isNaN(shares) || isNaN(price) || !ticker) return;
-            const id = `${ticker}-SELL-narrative-${rowIdx}`;
-            if (existingIds.has(id)) return;
-            existingIds.add(id);
-            transactions.push({
-              id,
-              ticker,
-              action: 'SELL',
-              shares,
-              price,
-              date: new Date().toISOString().slice(0, 10),
-              account: defaultAccount,
-            });
-            detectedColumns['Sell Transactions'] = 'parsed from narrative text';
-          });
-        });
-
-        resolve({ transactions, errors: [], detectedColumns });
+        resolve({ transactions, errors: [], detectedColumns, importedRealizedGains, snapshotPrices });
       } catch (err) {
-        resolve({ transactions: [], errors: [String(err)], detectedColumns: {} });
+        resolve({ transactions: [], errors: [String(err)], detectedColumns: {}, importedRealizedGains: 0, snapshotPrices: {} });
       }
     };
     reader.readAsArrayBuffer(file);

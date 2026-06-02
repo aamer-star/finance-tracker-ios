@@ -7,6 +7,8 @@ const defaults: AppData = {
   watchlist: [],
   apiKey: '',
   accounts: ['Default'],
+  realizedGainsFromImport: 0,
+  snapshotPrices: {},
 };
 
 export function loadData(): AppData {
@@ -21,6 +23,18 @@ export function loadData(): AppData {
 
 export function saveData(data: AppData): void {
   localStorage.setItem(KEY, JSON.stringify(data));
+}
+
+export function mergeSnapshotData(
+  realizedGains: number,
+  snapshotPrices: Record<string, number>
+): void {
+  const data = loadData();
+  // Accumulate realized gains across imports
+  data.realizedGainsFromImport = (data.realizedGainsFromImport ?? 0) + realizedGains;
+  // Merge snapshot prices (latest import wins per ticker)
+  data.snapshotPrices = { ...(data.snapshotPrices ?? {}), ...snapshotPrices };
+  saveData(data);
 }
 
 export function addTransactions(incoming: Transaction[]): void {
