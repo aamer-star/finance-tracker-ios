@@ -69,7 +69,7 @@ function parseAction(raw: unknown): Action {
 const TICKER_CANDIDATES = [
   'ticker', 'symbol', 'stock', 'security', 'instrument',
   'tickersymbol', 'stocksymbol', 'securitysymbol', 'stockticker',
-  'equity', 'asset', 'holding', 'description', 'issuer',
+  'asset', 'holding', 'description', 'issuer',
   'securityname', 'securitydescription', 'stockname', 'company',
 ];
 
@@ -109,18 +109,27 @@ const ACCOUNT_CANDIDATES = [
   'fund', 'wallet', 'custodian',
 ];
 
-// Find the row index that looks like actual column headers
-// (skips section label rows like "Equity", "Cash", etc.)
+// Find the row that looks like actual column headers.
+// Requires at least 2 non-empty cells AND at least 2 matches across all
+// candidate lists — prevents single-cell section labels like "Equity" from
+// being picked up as the header row.
 function findHeaderRowIndex(allRows: unknown[][]): number {
-  for (let i = 0; i < Math.min(allRows.length, 6); i++) {
-    const row = allRows[i];
-    const cells = row.map((c) => normalizeHeader(String(c ?? '')));
-    const hasKnownCol = [
-      ...TICKER_CANDIDATES, ...SHARES_CANDIDATES, ...PRICE_CANDIDATES,
-    ].some((candidate) =>
-      cells.some((cell) => cell === normalizeHeader(candidate) || cell.includes(normalizeHeader(candidate)))
-    );
-    if (hasKnownCol) return i;
+  const allCandidates = [
+    ...TICKER_CANDIDATES, ...SHARES_CANDIDATES, ...PRICE_CANDIDATES,
+    ...DATE_CANDIDATES, ...ACTION_CANDIDATES, ...ACCOUNT_CANDIDATES,
+  ].map(normalizeHeader);
+
+  for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+    const row = allRows[i] as unknown[];
+    const nonEmpty = row.filter((c) => String(c ?? '').trim().length > 0);
+    if (nonEmpty.length < 2) continue; // section labels are usually single cells
+
+    const cells = nonEmpty.map((c) => normalizeHeader(String(c)));
+    const matchCount = cells.filter((cell) =>
+      allCandidates.some((cand) => cand.length >= 2 && (cell === cand || cell.includes(cand)))
+    ).length;
+
+    if (matchCount >= 2) return i;
   }
   return 0;
 }
