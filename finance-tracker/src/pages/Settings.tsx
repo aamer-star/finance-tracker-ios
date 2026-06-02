@@ -8,15 +8,17 @@ import type { AppData } from '../types';
 interface Props {
   data: AppData;
   onRefresh: () => void;
+  user?: { id: string; email: string } | null;
 }
 
-export default function Settings({ data, onRefresh }: Props) {
+export default function Settings({ data, onRefresh, user: userProp }: Props) {
   const [apiKey, setApiKey] = useState(data.apiKey);
   const [saved, setSaved] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
 
   const session = getSession();
+  const activeUser = userProp ?? session?.user ?? null;
 
   const saveKey = () => {
     const d = loadData();
@@ -87,10 +89,10 @@ export default function Settings({ data, onRefresh }: Props) {
       </div>
 
       {/* Cloud sync */}
-      {session && (
+      {activeUser && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
           <h2 className="font-semibold flex items-center gap-2"><Cloud size={15} className="text-green-400" /> Cloud Sync</h2>
-          <p className="text-sm text-gray-400">Signed in as <span className="text-gray-200">{session.user.email}</span></p>
+          <p className="text-sm text-gray-400">Signed in as <span className="text-gray-200">{activeUser.email}</span></p>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={forcePush}

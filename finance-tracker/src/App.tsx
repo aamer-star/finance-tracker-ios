@@ -139,7 +139,7 @@ export default function App() {
               onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
           } />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
-          <Route path="/settings" element={<Settings data={data} onRefresh={refresh} />} />
+          <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />
         </Routes>
       </Layout>
 
