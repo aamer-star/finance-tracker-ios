@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { User } from '@supabase/supabase-js';
 import {
   LayoutDashboard, Briefcase, ArrowLeftRight, BarChart2,
   Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight,
@@ -21,7 +20,7 @@ const nav = [
 
 interface Props {
   children: React.ReactNode;
-  user: User | null;
+  user: { id: string; email: string } | null;
   onSignIn: () => void;
   onSignOut: () => void;
 }

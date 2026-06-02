@@ -16,9 +16,9 @@ exports.handler = async (event) => {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
-  // Use anon client to verify the JWT and get the user
-  const anonClient = createClient(supabaseUrl, process.env.SUPABASE_ANON_KEY || serviceKey);
-  const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
+  // Verify the JWT using the service role client
+  const verifyClient = createClient(supabaseUrl, serviceKey);
+  const { data: { user }, error: authError } = await verifyClient.auth.getUser(token);
   if (authError || !user) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
   }

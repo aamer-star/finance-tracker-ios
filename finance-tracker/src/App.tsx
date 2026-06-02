@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import type { User } from '@supabase/supabase-js';
 import Layout from './components/Layout';
 import UploadModal from './components/UploadModal';
 import AuthModal from './components/AuthModal';
@@ -15,9 +14,11 @@ import Chat from './pages/Chat';
 import Settings from './pages/Settings';
 import { loadData, saveData } from './utils/storage';
 import { fetchAllQuotes, fetchQuote } from './utils/stockApi';
-import { supabase } from './lib/supabase';
+import { getSession, clearSession } from './lib/auth';
 import { loadFromCloud, saveToCloud } from './lib/cloudSync';
 import type { AppData, StockQuote } from './types';
+
+interface AuthUser { id: string; email: string }
 
 export default function App() {
   const [data, setData] = useState<AppData>(loadData);
@@ -26,30 +27,17 @@ export default function App() {
   const [showUpload, setShowUpload] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState('All');
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => getSession()?.user ?? null);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auth state listener
+  // On mount, if logged in, load data from cloud
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) syncFromCloud();
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) syncFromCloud();
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const syncFromCloud = async () => {
-    const cloudData = await loadFromCloud();
-    if (cloudData) {
-      saveData(cloudData);
-      setData(cloudData);
+    if (user) {
+      loadFromCloud().then((cloudData) => {
+        if (cloudData) { saveData(cloudData); setData(cloudData); }
+      });
     }
-  };
+  }, []);
 
   const refresh = useCallback(() => {
     const d = loadData();
@@ -80,23 +68,25 @@ export default function App() {
     if (q) setQuotes((prev) => ({ ...prev, [ticker]: q }));
   }, []);
 
-  useEffect(() => {
-    loadQuotes(data);
-  }, [data.transactions.length, data.watchlist.length]);
-
+  useEffect(() => { loadQuotes(data); }, [data.transactions.length, data.watchlist.length]);
   useEffect(() => {
     const id = setInterval(() => loadQuotes(data), 5 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
 
-  const handleRefresh = () => refresh();
-  const allAccounts = ['All', ...data.accounts];
+  const handleAuthSuccess = (newUser: AuthUser) => {
+    setUser(newUser);
+    loadFromCloud().then((cloudData) => {
+      if (cloudData) { saveData(cloudData); setData(cloudData); }
+    });
+  };
 
-  const handleSignOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
+  const handleSignOut = () => {
+    clearSession();
     setUser(null);
   };
+
+  const allAccounts = ['All', ...data.accounts];
 
   return (
     <BrowserRouter>
@@ -120,87 +110,37 @@ export default function App() {
         )}
 
         <Routes>
-          <Route
-            path="/"
-            element={
-              <Dashboard
-                data={data}
-                quotes={quotes}
-                quotesLoading={quotesLoading}
-                selectedAccount={selectedAccount}
-                onUpload={() => setShowUpload(true)}
-              />
-            }
-          />
-          <Route
-            path="/portfolio"
-            element={
-              <Portfolio
-                data={data}
-                quotes={quotes}
-                quotesLoading={quotesLoading}
-                selectedAccount={selectedAccount}
-              />
-            }
-          />
-          <Route
-            path="/transactions"
-            element={
-              <Transactions
-                data={data}
-                selectedAccount={selectedAccount}
-                onUpload={() => setShowUpload(true)}
-              />
-            }
-          />
-          <Route
-            path="/analytics"
-            element={<Analytics data={data} quotes={quotes} selectedAccount={selectedAccount} />}
-          />
-          <Route
-            path="/news"
-            element={<News data={data} quotes={quotes} />}
-          />
-          <Route
-            path="/tax"
-            element={<TaxSummary data={data} selectedAccount={selectedAccount} />}
-          />
-          <Route
-            path="/watchlist"
-            element={
-              <Watchlist
-                data={data}
-                quotes={quotes}
-                quotesLoading={quotesLoading}
-                onRefresh={handleRefresh}
-                onFetchQuote={fetchSingleQuote}
-              />
-            }
-          />
-          <Route
-            path="/chat"
-            element={<Chat data={data} quotes={quotes} />}
-          />
-          <Route
-            path="/settings"
-            element={<Settings data={data} onRefresh={handleRefresh} />}
-          />
+          <Route path="/" element={
+            <Dashboard data={data} quotes={quotes} quotesLoading={quotesLoading}
+              selectedAccount={selectedAccount} onUpload={() => setShowUpload(true)} />
+          } />
+          <Route path="/portfolio" element={
+            <Portfolio data={data} quotes={quotes} quotesLoading={quotesLoading}
+              selectedAccount={selectedAccount} />
+          } />
+          <Route path="/transactions" element={
+            <Transactions data={data} selectedAccount={selectedAccount}
+              onUpload={() => setShowUpload(true)} />
+          } />
+          <Route path="/analytics" element={
+            <Analytics data={data} quotes={quotes} selectedAccount={selectedAccount} />
+          } />
+          <Route path="/news" element={<News data={data} quotes={quotes} />} />
+          <Route path="/tax" element={<TaxSummary data={data} selectedAccount={selectedAccount} />} />
+          <Route path="/watchlist" element={
+            <Watchlist data={data} quotes={quotes} quotesLoading={quotesLoading}
+              onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
+          } />
+          <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
+          <Route path="/settings" element={<Settings data={data} onRefresh={refresh} />} />
         </Routes>
       </Layout>
 
       {showUpload && (
-        <UploadModal
-          onClose={() => setShowUpload(false)}
-          data={data}
-          onRefresh={handleRefresh}
-        />
+        <UploadModal onClose={() => setShowUpload(false)} data={data} onRefresh={refresh} />
       )}
-
       {showAuth && (
-        <AuthModal
-          onClose={() => setShowAuth(false)}
-          onSuccess={() => {}}
-        />
+        <AuthModal onClose={() => setShowAuth(false)} onSuccess={handleAuthSuccess} />
       )}
     </BrowserRouter>
   );
