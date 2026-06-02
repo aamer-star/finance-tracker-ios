@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
 import Layout from './components/Layout';
 import UploadModal from './components/UploadModal';
+import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Transactions from './pages/Transactions';
 import Analytics from './pages/Analytics';
-import Chat from './pages/Chat';
 import News from './pages/News';
 import TaxSummary from './pages/TaxSummary';
 import Watchlist from './pages/Watchlist';
+import Chat from './pages/Chat';
 import Settings from './pages/Settings';
-import { loadData } from './utils/storage';
+import { loadData, saveData } from './utils/storage';
 import { fetchAllQuotes, fetchQuote } from './utils/stockApi';
+import { supabase } from './lib/supabase';
+import { loadFromCloud, saveToCloud } from './lib/cloudSync';
 import type { AppData, StockQuote } from './types';
 
 export default function App() {
@@ -20,11 +24,42 @@ export default function App() {
   const [quotes, setQuotes] = useState<Record<string, StockQuote>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState('All');
+  const [user, setUser] = useState<User | null>(null);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auth state listener
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) syncFromCloud(session.user.id);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) syncFromCloud(session.user.id);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const syncFromCloud = async (userId: string) => {
+    const cloudData = await loadFromCloud(userId);
+    if (cloudData) {
+      saveData(cloudData);
+      setData(cloudData);
+    }
+  };
 
   const refresh = useCallback(() => {
-    setData(loadData());
-  }, []);
+    const d = loadData();
+    setData(d);
+    // Debounced cloud sync on any data change
+    if (user) {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      syncTimer.current = setTimeout(() => saveToCloud(user.id, d), 1500);
+    }
+  }, [user]);
 
   const loadQuotes = useCallback(async (d: AppData) => {
     const tickers = [
@@ -35,7 +70,6 @@ export default function App() {
     ];
     if (!tickers.length) return;
     setQuotesLoading(true);
-    // Yahoo Finance works without any API key; Finnhub key used as fallback
     const result = await fetchAllQuotes(tickers, d.apiKey || undefined);
     setQuotes((prev) => ({ ...prev, ...result }));
     setQuotesLoading(false);
@@ -47,27 +81,27 @@ export default function App() {
     if (q) setQuotes((prev) => ({ ...prev, [ticker]: q }));
   }, []);
 
-  // Load quotes on mount and when transactions/watchlist change
   useEffect(() => {
     loadQuotes(data);
   }, [data.transactions.length, data.watchlist.length]);
 
-  // Auto-refresh quotes every 5 minutes
   useEffect(() => {
     const id = setInterval(() => loadQuotes(data), 5 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
 
-  const handleRefresh = () => {
-    refresh();
-  };
-
+  const handleRefresh = () => refresh();
   const allAccounts = ['All', ...data.accounts];
+
+  const handleSignOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
   return (
     <BrowserRouter>
-      <Layout>
-        {/* Account selector bar */}
+      <Layout user={user} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut}>
         {data.transactions.length > 0 && (
           <div className="flex items-center gap-2 px-6 pt-4 pb-0 flex-wrap">
             {allAccounts.map((a) => (
@@ -160,6 +194,13 @@ export default function App() {
           onClose={() => setShowUpload(false)}
           data={data}
           onRefresh={handleRefresh}
+        />
+      )}
+
+      {showAuth && (
+        <AuthModal
+          onClose={() => setShowAuth(false)}
+          onSuccess={() => {}}
         />
       )}
     </BrowserRouter>

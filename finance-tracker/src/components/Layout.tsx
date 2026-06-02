@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
 import {
   LayoutDashboard, Briefcase, ArrowLeftRight, BarChart2,
-  Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight, MessageSquare,
+  Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight,
+  MessageSquare, LogIn, LogOut, UserCircle,
 } from 'lucide-react';
 
 const nav = [
@@ -17,7 +19,14 @@ const nav = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+interface Props {
+  children: React.ReactNode;
+  user: User | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
+}
+
+export default function Layout({ children, user, onSignIn, onSignOut }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -68,6 +77,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
         </nav>
+
+        {/* Auth section */}
+        <div className={`border-t border-gray-800 p-2 ${collapsed ? '' : 'px-2'}`}>
+          {user ? (
+            <div className={`space-y-1`}>
+              {!collapsed && (
+                <div className="flex items-center gap-2 px-2 py-1.5">
+                  <UserCircle size={15} className="text-green-400 shrink-0" />
+                  <span className="text-xs text-gray-400 truncate">{user.email}</span>
+                </div>
+              )}
+              <button
+                onClick={onSignOut}
+                title={collapsed ? 'Sign out' : undefined}
+                className={`w-full flex items-center rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors ${
+                  collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+                }`}
+              >
+                <LogOut size={17} className="shrink-0" />
+                {!collapsed && <span>Sign out</span>}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onSignIn}
+              title={collapsed ? 'Sign in' : undefined}
+              className={`w-full flex items-center rounded-lg text-sm text-green-400 hover:bg-green-500/10 transition-colors ${
+                collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+              }`}
+            >
+              <LogIn size={17} className="shrink-0" />
+              {!collapsed && <span className="font-medium">Sign in / Sign up</span>}
+            </button>
+          )}
+        </div>
       </aside>
 
       {/* Main content */}
