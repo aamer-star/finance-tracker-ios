@@ -14,26 +14,50 @@ exports.handler = async (event) => {
     const client = new Anthropic({ apiKey });
 
     const portfolioDesc = holdings
-      .map(h => `${h.ticker} (${h.pct.toFixed(1)}% of portfolio, ${h.sector})`)
+      .map(h => `${h.ticker} (${h.pct.toFixed(1)}%, ${h.sector})`)
       .join(', ');
 
     const message = await client.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 900,
+      max_tokens: 1024,
       messages: [{
         role: 'user',
-        content: `You are a portfolio analyst. Portfolio: ${portfolioDesc}. Total value: $${totalValue.toFixed(0)}.
+        content: `You are a portfolio analyst. Analyze this portfolio and suggest 5 complementary US stocks.
 
-Suggest exactly 5 US stocks to complement this portfolio. Respond with ONLY a valid JSON array, nothing else:
-[{"ticker":"SYMBOL","name":"Full Company Name","reason":"1-2 sentence rationale focusing on portfolio fit","sector":"Sector","riskLevel":"low|moderate|high"}]
+Portfolio (total $${Math.round(totalValue).toLocaleString()}): ${portfolioDesc}
 
-Focus on: gaps in diversification, sectors not represented, high-quality blue chips, and risk balance. Only suggest liquid, well-known US-listed stocks.`,
+Return ONLY a JSON array with exactly 5 objects, no other text:
+[
+  {"ticker":"AAPL","name":"Apple Inc.","reason":"Brief reason why it fits this portfolio.","sector":"Technology","riskLevel":"low"},
+  ...
+]
+
+riskLevel must be one of: low, moderate, high
+Focus on diversification gaps and sectors underrepresented in the portfolio.`,
       }],
     });
 
-    const text = message.content[0]?.text ?? '[]';
+    const text = message.content[0]?.text ?? '';
+
+    // Try to extract JSON array from response
     const match = text.match(/\[[\s\S]*\]/);
-    const suggestions = match ? JSON.parse(match[0]) : [];
+    if (!match) {
+      console.error('No JSON array found in response:', text.slice(0, 200));
+      return ok({ suggestions: [], error: 'Could not parse AI response. Try again.' });
+    }
+
+    let suggestions;
+    try {
+      suggestions = JSON.parse(match[0]);
+    } catch (parseErr) {
+      console.error('JSON parse failed:', parseErr.message, match[0].slice(0, 200));
+      return ok({ suggestions: [], error: 'Could not parse AI response. Try again.' });
+    }
+
+    if (!Array.isArray(suggestions) || !suggestions.length) {
+      return ok({ suggestions: [], error: 'AI returned empty suggestions. Try again.' });
+    }
+
     return ok({ suggestions: suggestions.slice(0, 5) });
   } catch (e) {
     console.error('Suggestions error:', e.message);

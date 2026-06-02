@@ -62,6 +62,7 @@ export default function Suggestions({ data, quotes, onRefresh }: Props) {
       });
       const json = await res.json();
       if (json.error === 'no_key') { setError('Anthropic API key not configured on server.'); return; }
+      if (json.error) { setError(`Server error: ${json.error}`); return; }
       if (!json.suggestions?.length) { setError('No suggestions returned. Try again.'); return; }
       setSuggestions(json.suggestions);
       const tickers = json.suggestions.map((s: Suggestion) => s.ticker);
