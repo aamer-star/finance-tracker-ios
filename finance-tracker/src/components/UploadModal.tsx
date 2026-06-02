@@ -14,13 +14,15 @@ export default function UploadModal({ onClose, data, onRefresh }: Props) {
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [detectedCols, setDetectedCols] = useState<Record<string, string>>({});
   const [account, setAccount] = useState(data.accounts[0] ?? 'Default');
   const [newAccount, setNewAccount] = useState('');
 
   const processFile = async (file: File) => {
     setStatus('parsing');
     const acct = newAccount.trim() || account;
-    const { transactions, errors } = await parseExcel(file, acct);
+    const { transactions, errors, detectedColumns } = await parseExcel(file, acct);
+    setDetectedCols(detectedColumns);
     if (errors.length) {
       setStatus('error');
       setMessage(errors.join('\n'));
@@ -88,15 +90,28 @@ export default function UploadModal({ onClose, data, onRefresh }: Props) {
           <p className="text-xs text-gray-600 mt-2">Supports .xlsx, .xls, .csv</p>
         </div>
 
-        {/* Column guide */}
-        <div className="mt-4 bg-gray-800/50 rounded-lg p-3 text-xs text-gray-500">
-          <p className="font-medium text-gray-400 mb-1">Expected columns (auto-detected):</p>
-          <p>Ticker/Symbol · Shares/Qty · Price/Cost · Date (optional) · Action (optional: BUY/SELL) · Account (optional)</p>
+        {/* Column hint */}
+        <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs text-gray-500">
+          <p className="font-medium text-gray-400 mb-1">Auto-detected from any label, e.g.:</p>
+          <p>Ticker / Symbol / Security · Shares / Qty / Quantity · Price / Avg Cost / Cost Basis · Date Acquired / Trade Date · Buy/Sell / Action · Account / Portfolio</p>
         </div>
 
         {status === 'parsing' && (
           <p className="mt-3 text-sm text-gray-400 text-center animate-pulse">Parsing file...</p>
         )}
+
+        {(status === 'done' || status === 'error') && Object.keys(detectedCols).length > 0 && (
+          <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
+            <p className="text-gray-400 font-medium mb-1.5">Columns matched:</p>
+            {Object.entries(detectedCols).map(([field, col]) => (
+              <div key={field} className="flex justify-between">
+                <span className="text-gray-500">{field}</span>
+                <span className="text-green-400 font-medium">"{col}"</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {status === 'done' && (
           <div className="mt-3 flex items-center gap-2 text-green-400 text-sm">
             <CheckCircle size={16} /> {message}
@@ -105,7 +120,7 @@ export default function UploadModal({ onClose, data, onRefresh }: Props) {
         {status === 'error' && (
           <div className="mt-3 flex items-start gap-2 text-red-400 text-sm">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <pre className="whitespace-pre-wrap">{message}</pre>
+            <pre className="whitespace-pre-wrap text-xs">{message}</pre>
           </div>
         )}
       </div>
