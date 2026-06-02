@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, RefreshCw } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { computeHoldings, computeRealizedGains, computeTotalNetProfit } from '../utils/portfolio';
 import type { AppData, StockQuote } from '../types';
@@ -10,6 +10,7 @@ interface Props {
   quotesLoading: boolean;
   selectedAccount: string;
   onUpload: () => void;
+  onRefreshQuotes: () => void;
 }
 
 function fmt(n: number, decimals = 2) {
@@ -25,7 +26,7 @@ function fmtPct(n: number) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
 }
 
-export default function Dashboard({ data, quotes, quotesLoading, selectedAccount, onUpload }: Props) {
+export default function Dashboard({ data, quotes, quotesLoading, selectedAccount, onUpload, onRefreshQuotes }: Props) {
   const holdings = useMemo(
     () => computeHoldings(data.transactions, selectedAccount),
     [data.transactions, selectedAccount]
@@ -93,12 +94,22 @@ export default function Dashboard({ data, quotes, quotesLoading, selectedAccount
             {selectedAccount === 'All' ? 'All accounts' : selectedAccount}
           </p>
         </div>
-        <button
-          onClick={onUpload}
-          className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-black font-medium px-4 py-2 rounded-xl text-sm transition-colors"
-        >
-          <Upload size={15} /> Import
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRefreshQuotes}
+            disabled={quotesLoading}
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white bg-gray-900 border border-gray-800 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={quotesLoading ? 'animate-spin' : ''} />
+            {quotesLoading ? 'Updating…' : 'Refresh'}
+          </button>
+          <button
+            onClick={onUpload}
+            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-black font-medium px-4 py-2 rounded-xl text-sm transition-colors"
+          >
+            <Upload size={15} /> Import
+          </button>
+        </div>
       </div>
 
       {/* Stats grid */}

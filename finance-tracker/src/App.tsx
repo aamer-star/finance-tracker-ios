@@ -124,7 +124,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={
             <Dashboard data={data} quotes={quotes} quotesLoading={quotesLoading}
-              selectedAccount={selectedAccount} onUpload={() => setShowUpload(true)} />
+              selectedAccount={selectedAccount} onUpload={() => setShowUpload(true)}
+              onRefreshQuotes={() => loadQuotes(data)} />
           } />
           <Route path="/portfolio" element={
             <Portfolio data={data} quotes={quotes} quotesLoading={quotesLoading}
