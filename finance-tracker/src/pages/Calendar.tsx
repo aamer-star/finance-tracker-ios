@@ -15,12 +15,6 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function formatRevenue(n: number): string {
-  if (n >= 1e12) return `$${(n / 1e12).toFixed(1)}T`;
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-  return `$${n.toLocaleString()}`;
-}
 
 function urgencyClass(days: number): string {
   if (days <= 0) return 'border-yellow-700/60 bg-yellow-500/5';
