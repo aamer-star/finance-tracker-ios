@@ -156,7 +156,7 @@ export default function App() {
           <Route path="/suggestions" element={
             <Suggestions data={data} quotes={quotes} onRefresh={refresh} />
           } />
-          <Route path="/targets" element={<Goals />} />
+          <Route path="/targets" element={<Goals data={data} quotes={quotes} />} />
           <Route path="/simulator" element={<Simulator quotes={quotes} />} />
           <Route path="/calendar" element={<Calendar data={data} quotes={quotes} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
