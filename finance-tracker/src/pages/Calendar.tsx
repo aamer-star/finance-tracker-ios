@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { CalendarDays, TrendingUp, DollarSign, AlertCircle, Clock, RefreshCw, Key } from 'lucide-react';
+import { CalendarDays, TrendingUp, DollarSign, AlertCircle, Clock, RefreshCw, X } from 'lucide-react';
 import { computeHoldings } from '../utils/portfolio';
 import type { AppData, StockQuote } from '../types';
 
@@ -12,8 +12,8 @@ interface CalEvent {
   ticker: string;
   date: Date;
   type: 'earnings' | 'exdividend';
-  epsEstimate?: number;
-  revenueEstimate?: number;
+  epsEstimate?: number | null;
+  revenueEstimate?: number | null;
 }
 
 function daysUntil(date: Date): number {
@@ -55,7 +55,57 @@ function groupEvents(events: CalEvent[]) {
   return groups;
 }
 
-function MiniCalendar({ events }: { events: CalEvent[] }) {
+function EventCard({ e }: { e: CalEvent }) {
+  const days = daysUntil(e.date);
+  return (
+    <div className={`border rounded-xl p-4 ${urgencyClass(days)}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+            e.type === 'earnings' ? 'bg-blue-500/20' : 'bg-purple-500/20'
+          }`}>
+            {e.type === 'earnings'
+              ? <TrendingUp size={14} className="text-blue-400" />
+              : <DollarSign size={14} className="text-purple-400" />}
+          </div>
+          <div>
+            <div className="font-semibold text-white">{e.ticker}</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {e.type === 'earnings' ? 'Earnings Report' : 'Ex-Dividend Date'}
+            </div>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-sm font-medium text-gray-200">{formatDate(e.date)}</div>
+          <div className={`text-xs mt-0.5 flex items-center justify-end gap-1 ${
+            days <= 0 ? 'text-yellow-400' : days <= 7 ? 'text-green-400' : 'text-gray-500'
+          }`}>
+            <Clock size={10} />
+            {days === 0 ? 'Today' : days < 0 ? `${Math.abs(days)}d ago` : `${days}d away`}
+          </div>
+        </div>
+      </div>
+      {e.type === 'earnings' && (e.epsEstimate != null || e.revenueEstimate != null) && (
+        <div className="mt-3 pt-3 border-t border-gray-800/60 grid grid-cols-2 gap-3 text-xs">
+          {e.epsEstimate != null && (
+            <div>
+              <div className="text-gray-500">EPS Est.</div>
+              <div className="text-gray-200 font-medium">${e.epsEstimate.toFixed(2)}</div>
+            </div>
+          )}
+          {e.revenueEstimate != null && (
+            <div>
+              <div className="text-gray-500">Rev. Est.</div>
+              <div className="text-gray-200 font-medium">{formatRevenue(e.revenueEstimate)}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniCalendar({ events, onDayClick }: { events: CalEvent[]; onDayClick: (day: number, month: number, year: number) => void }) {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
@@ -94,22 +144,50 @@ function MiniCalendar({ events }: { events: CalEvent[] }) {
           const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
           const hasEarnings = day !== null && earningsDays.has(day);
           const hasDividend = day !== null && dividendDays.has(day);
+          const hasEvent = hasEarnings || hasDividend;
           return (
-            <div key={i} className={`text-xs py-1.5 rounded flex items-center justify-center ${
-              !day ? '' :
-              isToday ? 'bg-green-500 text-black font-bold' :
-              hasEarnings ? 'bg-blue-500/25 text-blue-300 font-medium' :
-              hasDividend ? 'bg-purple-500/25 text-purple-300 font-medium' :
-              'text-gray-400'
-            }`}>
+            <button
+              key={i}
+              onClick={() => day && hasEvent && onDayClick(day, month, year)}
+              className={`text-xs py-1.5 rounded flex items-center justify-center transition-opacity ${
+                !day ? '' :
+                isToday ? 'bg-green-500 text-black font-bold' :
+                hasEarnings ? 'bg-blue-500/25 text-blue-300 font-medium hover:bg-blue-500/40 cursor-pointer' :
+                hasDividend ? 'bg-purple-500/25 text-purple-300 font-medium hover:bg-purple-500/40 cursor-pointer' :
+                'text-gray-400 cursor-default'
+              }`}
+            >
               {day || ''}
-            </div>
+            </button>
           );
         })}
       </div>
       <div className="flex gap-3 mt-3 text-xs text-gray-500">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500/50 inline-block" /> Earnings</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-purple-500/50 inline-block" /> Dividend</span>
+      </div>
+      <p className="text-xs text-gray-600 mt-2 text-center">Tap a highlighted date</p>
+    </div>
+  );
+}
+
+function DayPopup({ day, month, year, events, onClose }: {
+  day: number; month: number; year: number; events: CalEvent[]; onClose: () => void;
+}) {
+  const dateLabel = new Date(year, month, day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const dayEvents = events.filter(e =>
+    e.date.getDate() === day && e.date.getMonth() === month && e.date.getFullYear() === year
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <span className="font-semibold text-sm">{dateLabel}</span>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={16} /></button>
+        </div>
+        <div className="overflow-y-auto p-4 space-y-2">
+          {dayEvents.map((e, i) => <EventCard key={i} e={e} />)}
+        </div>
       </div>
     </div>
   );
@@ -119,12 +197,12 @@ export default function CalendarPage({ data, quotes }: Props) {
   const holdings = computeHoldings(data.transactions);
   const tickers = useMemo(() => holdings.map(h => h.ticker), [holdings]);
 
-  const [earningsEvents, setEarningsEvents] = useState<CalEvent[]>([]);
+  const [events, setEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
-  const [noKey, setNoKey] = useState(false);
+  const [popup, setPopup] = useState<{ day: number; month: number; year: number } | null>(null);
 
-  // Ex-dividend dates come from the quotes already fetched by the app
+  // Ex-dividend dates from quotes (already available, no extra fetch)
   const dividendEvents = useMemo<CalEvent[]>(() => {
     const cutoffSecs = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
     return tickers.flatMap(ticker => {
@@ -134,15 +212,16 @@ export default function CalendarPage({ data, quotes }: Props) {
     });
   }, [tickers, quotes]);
 
-  const events = useMemo(
-    () => [...earningsEvents, ...dividendEvents].sort((a, b) => a.date.getTime() - b.date.getTime()),
-    [earningsEvents, dividendEvents]
-  );
+  const allEvents = useMemo(() => {
+    const covered = new Set(dividendEvents.map(e => `${e.ticker}:${e.type}`));
+    const extra = events.filter(e => !covered.has(`${e.ticker}:${e.type}`));
+    return [...events.filter(e => e.type === 'earnings'), ...dividendEvents, ...extra]
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [events, dividendEvents]);
 
   const load = async () => {
     if (!tickers.length) return;
     setLoading(true);
-    setNoKey(false);
     try {
       const res = await fetch('/.netlify/functions/calendar', {
         method: 'POST',
@@ -150,17 +229,12 @@ export default function CalendarPage({ data, quotes }: Props) {
         body: JSON.stringify({ tickers, apiKey: data.apiKey }),
       });
       const json = await res.json();
-      if (json.noKey) {
-        setNoKey(true);
-        setEarningsEvents([]);
-      } else {
-        setEarningsEvents(
-          (json.events ?? []).map((e: { ticker: string; date: number; type: string; epsEstimate?: number; revenueEstimate?: number }) => ({
-            ...e,
-            date: new Date(e.date * 1000),
-          }))
-        );
-      }
+      setEvents(
+        (json.events ?? []).map((e: { ticker: string; date: number; type: string; epsEstimate?: number | null; revenueEstimate?: number | null }) => ({
+          ...e,
+          date: new Date(e.date * 1000),
+        }))
+      );
     } catch {
       // silent
     }
@@ -168,11 +242,11 @@ export default function CalendarPage({ data, quotes }: Props) {
     setFetched(true);
   };
 
-  useEffect(() => { load(); }, [tickers.join(','), data.apiKey]);
+  useEffect(() => { load(); }, [tickers.join(',')]);
 
-  const groups = groupEvents(events);
-  const earningsCount = events.filter(e => e.type === 'earnings' && daysUntil(e.date) >= 0).length;
-  const dividendCount = events.filter(e => e.type === 'exdividend' && daysUntil(e.date) >= 0).length;
+  const groups = groupEvents(allEvents);
+  const earningsCount = allEvents.filter(e => e.type === 'earnings' && daysUntil(e.date) >= 0).length;
+  const dividendCount = allEvents.filter(e => e.type === 'exdividend' && daysUntil(e.date) >= 0).length;
 
   return (
     <div className="p-4 md:p-6 max-w-4xl space-y-5">
@@ -198,26 +272,10 @@ export default function CalendarPage({ data, quotes }: Props) {
           <CalendarDays size={40} className="mx-auto mb-3 opacity-30" />
           <p>Import your portfolio to see earnings dates</p>
         </div>
-      ) : loading && !fetched ? (
-        <div className="text-center py-16 text-gray-500">
-          <RefreshCw size={24} className="mx-auto mb-3 animate-spin opacity-50" />
-          <p>Fetching earnings dates for {tickers.length} holdings…</p>
-        </div>
       ) : (
-        <div className="grid md:grid-cols-[1fr_220px] gap-5">
-          <div className="space-y-5 min-w-0">
-            {noKey && (
-              <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-700/40 rounded-xl px-4 py-3 text-sm">
-                <Key size={15} className="text-amber-400 mt-0.5 shrink-0" />
-                <div>
-                  <div className="text-amber-300 font-medium">Finnhub API key required for earnings</div>
-                  <div className="text-gray-500 text-xs mt-0.5">
-                    Go to <span className="text-gray-300">Settings → Finnhub API Key</span> and add your free key from finnhub.io to see earnings dates.
-                  </div>
-                </div>
-              </div>
-            )}
-
+        <div className="grid md:grid-cols-[1fr_220px] gap-5 items-start">
+          {/* Scrollable events list */}
+          <div className="space-y-4 min-w-0">
             <div className="flex gap-2 flex-wrap">
               {earningsCount > 0 && (
                 <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-800/50 text-blue-300 text-xs px-3 py-1.5 rounded-full">
@@ -229,79 +287,54 @@ export default function CalendarPage({ data, quotes }: Props) {
                   <DollarSign size={11} /> {dividendCount} upcoming ex-dividend
                 </div>
               )}
-              {fetched && events.length === 0 && !noKey && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-                  <AlertCircle size={14} />
-                  No upcoming events found — Finnhub may not have next quarter's dates scheduled yet.
+              {loading && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <RefreshCw size={11} className="animate-spin" /> Fetching…
                 </div>
               )}
             </div>
 
-            {Object.entries(groups).map(([label, grp]) => {
-              if (!grp.length) return null;
-              return (
-                <div key={label}>
-                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{label}</h2>
-                  <div className="space-y-2">
-                    {grp.map((e, i) => {
-                      const days = daysUntil(e.date);
-                      return (
-                        <div key={i} className={`border rounded-xl p-4 ${urgencyClass(days)}`}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                e.type === 'earnings' ? 'bg-blue-500/20' : 'bg-purple-500/20'
-                              }`}>
-                                {e.type === 'earnings'
-                                  ? <TrendingUp size={14} className="text-blue-400" />
-                                  : <DollarSign size={14} className="text-purple-400" />}
-                              </div>
-                              <div>
-                                <div className="font-semibold text-white">{e.ticker}</div>
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  {e.type === 'earnings' ? 'Earnings Report' : 'Ex-Dividend Date'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <div className="text-sm font-medium text-gray-200">{formatDate(e.date)}</div>
-                              <div className={`text-xs mt-0.5 flex items-center justify-end gap-1 ${
-                                days <= 0 ? 'text-yellow-400' : days <= 7 ? 'text-green-400' : 'text-gray-500'
-                              }`}>
-                                <Clock size={10} />
-                                {days === 0 ? 'Today' : days < 0 ? `${Math.abs(days)}d ago` : `${days}d away`}
-                              </div>
-                            </div>
-                          </div>
-                          {e.type === 'earnings' && (e.epsEstimate != null || e.revenueEstimate != null) && (
-                            <div className="mt-3 pt-3 border-t border-gray-800/60 grid grid-cols-2 gap-3 text-xs">
-                              {e.epsEstimate != null && (
-                                <div>
-                                  <div className="text-gray-500">EPS Est.</div>
-                                  <div className="text-gray-200 font-medium">${e.epsEstimate.toFixed(2)}</div>
-                                </div>
-                              )}
-                              {e.revenueEstimate != null && (
-                                <div>
-                                  <div className="text-gray-500">Rev. Est.</div>
-                                  <div className="text-gray-200 font-medium">{formatRevenue(e.revenueEstimate)}</div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+            {fetched && allEvents.length === 0 && !loading && (
+              <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+                <AlertCircle size={14} />
+                No upcoming events found — dates may not be scheduled yet.
+              </div>
+            )}
+
+            {/* Fixed-height scrollable list */}
+            <div className="overflow-y-auto max-h-[60vh] space-y-4 pr-0.5">
+              {Object.entries(groups).map(([label, grp]) => {
+                if (!grp.length) return null;
+                return (
+                  <div key={label}>
+                    <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{label}</h2>
+                    <div className="space-y-2">
+                      {grp.map((e, i) => <EventCard key={i} e={e} />)}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          <div className="shrink-0">
-            <MiniCalendar events={events} />
+          {/* Calendar stays visible alongside the list */}
+          <div className="shrink-0 md:sticky md:top-6">
+            <MiniCalendar
+              events={allEvents}
+              onDayClick={(day, month, year) => setPopup({ day, month, year })}
+            />
           </div>
         </div>
+      )}
+
+      {popup && (
+        <DayPopup
+          day={popup.day}
+          month={popup.month}
+          year={popup.year}
+          events={allEvents}
+          onClose={() => setPopup(null)}
+        />
       )}
     </div>
   );
