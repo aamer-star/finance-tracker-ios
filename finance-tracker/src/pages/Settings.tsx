@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Save, Trash2, ExternalLink, CheckCircle, Cloud, Loader2, AlertCircle } from 'lucide-react';
 import { loadData, saveData } from '../utils/storage';
-import { saveToCloud, loadFromCloud } from '../lib/cloudSync';
+import { loadFromCloud } from '../lib/cloudSync';
 import { getSession } from '../lib/auth';
 import type { AppData } from '../types';
 
