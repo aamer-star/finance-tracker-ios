@@ -18,26 +18,19 @@ exports.handler = async (event) => {
   const from = fmtDate(past);
   const to = fmtDate(future);
   const cutoffMs = past.getTime();
+  const tickerSet = new Set(tickers.map((t) => t.toUpperCase()));
 
-  const results = await Promise.allSettled(
-    tickers.map((ticker) =>
-      fetch(
-        `https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&symbol=${encodeURIComponent(ticker)}&token=${apiKey}`
-      )
-        .then((r) => r.json())
-        .then((d) => ({ ticker, items: Array.isArray(d.earningsCalendar) ? d.earningsCalendar : [] }))
-    )
-  );
-
-  const events = [];
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
-    const { ticker, items } = r.value;
+  function parseItems(earningsCalendar, ticker) {
+    const items = Array.isArray(earningsCalendar) ? earningsCalendar : [];
+    const events = [];
     for (const item of items) {
-      const dateMs = new Date(item.date + 'T16:00:00Z').getTime(); // ~noon ET
+      const sym = (item.symbol ?? ticker ?? '').toUpperCase();
+      if (ticker && sym !== ticker.toUpperCase()) continue;
+      if (!tickerSet.has(sym)) continue;
+      const dateMs = new Date(item.date + 'T16:00:00Z').getTime();
       if (dateMs >= cutoffMs) {
         events.push({
-          ticker,
+          ticker: sym,
           date: Math.floor(dateMs / 1000),
           type: 'earnings',
           epsEstimate: item.epsEstimate ?? null,
@@ -45,8 +38,40 @@ exports.handler = async (event) => {
         });
       }
     }
+    return events;
   }
 
-  events.sort((a, b) => a.date - b.date);
-  return ok({ events });
+  // Try per-symbol first (works on free tier for most keys)
+  const perSymbolResults = await Promise.allSettled(
+    tickers.map((ticker) =>
+      fetch(
+        `https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&symbol=${encodeURIComponent(ticker)}&token=${apiKey}`
+      ).then((r) => r.json())
+       .then((d) => parseItems(d.earningsCalendar, ticker))
+    )
+  );
+
+  const perSymbolEvents = perSymbolResults.flatMap((r) =>
+    r.status === 'fulfilled' ? r.value : []
+  );
+
+  // If per-symbol returned results, use them
+  if (perSymbolEvents.length > 0) {
+    perSymbolEvents.sort((a, b) => a.date - b.date);
+    return ok({ events: perSymbolEvents });
+  }
+
+  // Fallback: fetch the full calendar and filter (works when symbol param is ignored)
+  try {
+    const res = await fetch(
+      `https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&token=${apiKey}`
+    );
+    const data = await res.json();
+    const events = parseItems(data.earningsCalendar, null);
+    events.sort((a, b) => a.date - b.date);
+    return ok({ events });
+  } catch (e) {
+    console.error('Finnhub calendar fallback failed:', e.message);
+    return ok({ events: [] });
+  }
 };
