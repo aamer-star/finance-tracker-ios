@@ -213,9 +213,12 @@ export default function CalendarPage({ data, quotes }: Props) {
   }, [tickers, quotes]);
 
   const allEvents = useMemo(() => {
-    const covered = new Set(dividendEvents.map(e => `${e.ticker}:${e.type}`));
-    const extra = events.filter(e => !covered.has(`${e.ticker}:${e.type}`));
-    return [...events.filter(e => e.type === 'earnings'), ...dividendEvents, ...extra]
+    // Earnings: from Netlify function only (Alpha Vantage)
+    const earnings = events.filter(e => e.type === 'earnings');
+    // Dividends: from quotes (Yahoo) first, fill gaps from Netlify for any missing tickers
+    const quoteDividendTickers = new Set(dividendEvents.map(e => e.ticker));
+    const extraDividends = events.filter(e => e.type === 'exdividend' && !quoteDividendTickers.has(e.ticker));
+    return [...earnings, ...dividendEvents, ...extraDividends]
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [events, dividendEvents]);
 
