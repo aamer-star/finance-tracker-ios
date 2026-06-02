@@ -1,0 +1,4 @@
+[build]
+  base    = "finance-tracker"
+  command = "npm install && npm run build"
+  publish = "dist"
