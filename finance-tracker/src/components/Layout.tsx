@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Briefcase, ArrowLeftRight, BarChart2,
   Receipt, Star, Settings, TrendingUp, Newspaper, ChevronLeft, ChevronRight,
   MessageSquare, LogIn, LogOut, UserCircle, CalendarDays,
+  LineChart, Sparkles, Bell, Target, FlaskConical,
 } from 'lucide-react';
 
 const nav = [
@@ -11,9 +12,14 @@ const nav = [
   { to: '/portfolio', icon: Briefcase, label: 'Portfolio' },
   { to: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
   { to: '/analytics', icon: BarChart2, label: 'Analytics' },
+  { to: '/charts', icon: LineChart, label: 'Charts' },
   { to: '/news', icon: Newspaper, label: 'News & Research' },
   { to: '/tax', icon: Receipt, label: 'Tax Summary' },
   { to: '/watchlist', icon: Star, label: 'Watchlist' },
+  { to: '/alerts', icon: Bell, label: 'Price Alerts' },
+  { to: '/suggestions', icon: Sparkles, label: 'AI Suggestions' },
+  { to: '/targets', icon: Target, label: 'Financial Goals' },
+  { to: '/simulator', icon: FlaskConical, label: 'Simulator' },
   { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
   { to: '/chat', icon: MessageSquare, label: 'AI Assistant' },
   { to: '/settings', icon: Settings, label: 'Settings' },

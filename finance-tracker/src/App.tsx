@@ -7,9 +7,14 @@ import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Transactions from './pages/Transactions';
 import Analytics from './pages/Analytics';
+import Charts from './pages/Charts';
 import News from './pages/News';
 import TaxSummary from './pages/TaxSummary';
 import Watchlist from './pages/Watchlist';
+import Alerts from './pages/Alerts';
+import Suggestions from './pages/Suggestions';
+import Goals from './pages/Goals';
+import Simulator from './pages/Simulator';
 import Calendar from './pages/Calendar';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
@@ -138,12 +143,21 @@ export default function App() {
           <Route path="/analytics" element={
             <Analytics data={data} quotes={quotes} selectedAccount={selectedAccount} />
           } />
+          <Route path="/charts" element={<Charts data={data} quotes={quotes} />} />
           <Route path="/news" element={<News data={data} quotes={quotes} />} />
-          <Route path="/tax" element={<TaxSummary data={data} selectedAccount={selectedAccount} />} />
+          <Route path="/tax" element={
+            <TaxSummary data={data} quotes={quotes} selectedAccount={selectedAccount} />
+          } />
           <Route path="/watchlist" element={
             <Watchlist data={data} quotes={quotes} quotesLoading={quotesLoading}
               onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
           } />
+          <Route path="/alerts" element={<Alerts quotes={quotes} />} />
+          <Route path="/suggestions" element={
+            <Suggestions data={data} quotes={quotes} onRefresh={refresh} />
+          } />
+          <Route path="/targets" element={<Goals />} />
+          <Route path="/simulator" element={<Simulator quotes={quotes} />} />
           <Route path="/calendar" element={<Calendar data={data} quotes={quotes} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
           <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />
