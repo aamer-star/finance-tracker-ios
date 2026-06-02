@@ -8,14 +8,12 @@ function normalizeHeader(h: string): string {
 function detectColumn(headers: string[], candidates: string[]): string | null {
   const normalized = headers.map((h) => ({ original: h, norm: normalizeHeader(h) }));
 
-  // Pass 1: exact normalized match
   for (const c of candidates) {
     const cn = normalizeHeader(c);
     const found = normalized.find((h) => h.norm === cn);
     if (found) return found.original;
   }
 
-  // Pass 2: header contains the candidate string
   for (const c of candidates) {
     const cn = normalizeHeader(c);
     if (cn.length < 2) continue;
@@ -23,7 +21,6 @@ function detectColumn(headers: string[], candidates: string[]): string | null {
     if (found) return found.original;
   }
 
-  // Pass 3: candidate contains the header string (short headers like "pp", "qty")
   for (const c of candidates) {
     const cn = normalizeHeader(c);
     const found = normalized.find((h) => h.norm.length >= 2 && cn.includes(h.norm));
@@ -33,10 +30,8 @@ function detectColumn(headers: string[], candidates: string[]): string | null {
   return null;
 }
 
-// Strip exchange prefix: "NYSE: ORCL" → "ORCL", "NASDAQ: NVDA" → "NVDA"
 function parseTicker(raw: string): string {
   const s = raw.toUpperCase().trim();
-  // Handle "EXCHANGE: TICKER" format
   const colonIdx = s.lastIndexOf(':');
   if (colonIdx !== -1) {
     const after = s.slice(colonIdx + 1).replace(/[^A-Z0-9.]/g, '').trim();
@@ -77,16 +72,17 @@ const SHARES_CANDIDATES = [
   'shares', 'qty', 'quantity', 'units', 'numshares', 'numberofshares',
   'sharesowned', 'sharesheld', 'sharecount', 'position',
   'nosofshares', 'noshares', 'sharesquantity', 'lotquantity',
+  'exchangequantity',
 ];
 
-// PP = purchase price (common shorthand), CP = cost price
 const PRICE_CANDIDATES = [
   'pp', 'purchaseprice', 'buyprice', 'cost', 'avgcost', 'averagecost',
   'costbasis', 'costpershare', 'unitcost', 'shareprice', 'avgprice',
   'averageprice', 'purchasepricepershare', 'costbasispershare',
   'avgcostbasis', 'averagecostbasis', 'entryprice', 'openprice',
   'pricepershare', 'priceperunit', 'unitprice', 'acquiredprice',
-  'openingprice', 'basispershare', 'price',
+  'openingprice', 'basispershare', 'price', 'tprice', 'lastprice',
+  'averagecostbasis',
 ];
 
 const DATE_CANDIDATES = [
@@ -94,13 +90,14 @@ const DATE_CANDIDATES = [
   'dateacquired', 'acquireddate', 'acquisitiondate', 'opendate',
   'entrydate', 'datepurchased', 'settlementdate', 'processdate',
   'orderdate', 'executiondate', 'dateofpurchase', 'dateentered',
-  'dateopened', 'datebought', 'dateinvested',
+  'dateopened', 'datebought', 'dateinvested', 'rundate', 'datetime',
+  'transactiondate',
 ];
 
 const ACTION_CANDIDATES = [
   'action', 'type', 'transactiontype', 'side', 'ordertype',
   'activity', 'activitytype', 'transaction', 'buysell', 'direction',
-  'transcode', 'transtype', 'orderaction',
+  'transcode', 'transtype', 'orderaction', 'instruction',
 ];
 
 const ACCOUNT_CANDIDATES = [
@@ -109,42 +106,39 @@ const ACCOUNT_CANDIDATES = [
   'fund', 'wallet', 'custodian',
 ];
 
-// Find the row that looks like actual column headers.
-// Requires at least 2 non-empty cells AND at least 2 matches across all
-// candidate lists — prevents single-cell section labels like "Equity" from
-// being picked up as the header row.
-function findHeaderRowIndex(allRows: unknown[][]): number {
-  const allCandidates = [
-    ...TICKER_CANDIDATES, ...SHARES_CANDIDATES, ...PRICE_CANDIDATES,
-    ...DATE_CANDIDATES, ...ACTION_CANDIDATES, ...ACCOUNT_CANDIDATES,
-  ].map(normalizeHeader);
+// Known broker profiles for display purposes (detect by characteristic columns)
+const BROKER_PROFILES: Array<{ name: string; signatures: string[][] }> = [
+  { name: 'Charles Schwab', signatures: [['symbol', 'quantity', 'price', 'marketvalue'], ['symbol', 'description', 'quantity', 'costbasis']] },
+  { name: 'Fidelity', signatures: [['symbol', 'quantity', 'lastprice', 'currentvalue', 'costbasistotal'], ['symbol', 'quantity', 'settlementdate', 'transactiontype']] },
+  { name: 'Robinhood', signatures: [['instrument', 'quantity', 'averageprice', 'side'], ['symbol', 'quantity', 'averageprice', 'side']] },
+  { name: 'Interactive Brokers', signatures: [['symbol', 'qty', 'tprice', 'datetime', 'buysell'], ['symbol', 'quantity', 'tradeprice', 'opencloseind']] },
+  { name: 'TD Ameritrade', signatures: [['symbol', 'qty', 'price', 'tradedate', 'instruction'], ['description', 'quantity', 'symbol', 'price', 'commission']] },
+  { name: 'Vanguard', signatures: [['tickersymbol', 'shares', 'shareprice'], ['symbol', 'shares', 'price', 'transactiontype']] },
+  { name: 'E*TRADE', signatures: [['symbol', 'quantity', 'price', 'dateacquired'], ['symbol', 'quantity', 'totalgainloss']] },
+  { name: 'Merrill Lynch', signatures: [['securitydescription', 'symbol', 'quantity', 'purchaseprice']] },
+  { name: 'Webull', signatures: [['symbol', 'side', 'qty', 'avgprice', 'filledtime']] },
+];
 
-  for (let i = 0; i < Math.min(allRows.length, 10); i++) {
-    const row = allRows[i] as unknown[];
-    const nonEmpty = row.filter((c) => String(c ?? '').trim().length > 0);
-    if (nonEmpty.length < 2) continue; // section labels are usually single cells
+export function detectBroker(headers: string[]): string | null {
+  const normalized = headers.map(normalizeHeader);
+  let bestMatch: { name: string; score: number } | null = null;
 
-    const cells = nonEmpty.map((c) => normalizeHeader(String(c)));
-    const matchCount = cells.filter((cell) =>
-      allCandidates.some((cand) => cand.length >= 2 && (cell === cand || cell.includes(cand)))
-    ).length;
-
-    if (matchCount >= 2) return i;
+  for (const profile of BROKER_PROFILES) {
+    for (const sig of profile.signatures) {
+      const score = sig.filter(s => normalized.some(n => n === s || n.includes(s) || s.includes(n))).length;
+      if (score >= Math.ceil(sig.length * 0.6) && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { name: profile.name, score };
+      }
+    }
   }
-  return 0;
+  return bestMatch?.name ?? null;
 }
 
-// Columns for current price (CP) and pre-computed gain
 const CURRENT_PRICE_CANDIDATES = [
   'cp', 'currentprice', 'marketprice', 'lastprice', 'currentvalue',
   'last', 'close', 'closingprice', 'marketvalue',
 ];
-const GAIN_CANDIDATES = [
-  'capitalgain', 'capitalgainloss', 'gainloss', 'gain', 'unrealizedgain',
-  'unrealizedgainloss', 'profitloss', 'pl', 'pnl',
-];
 
-// Scan all cells for a "Total Realized Gains" label and return the associated number
 function extractTotalRealizedGains(allRows: unknown[][]): number {
   const LABEL_RE = /total\s*(realized)?\s*(gain|profit|return)/i;
   for (let i = 0; i < allRows.length; i++) {
@@ -152,12 +146,10 @@ function extractTotalRealizedGains(allRows: unknown[][]): number {
     for (let j = 0; j < row.length; j++) {
       const cell = String(row[j] ?? '').trim();
       if (LABEL_RE.test(cell)) {
-        // Look for a number in the same row or the next row
         for (let k = j + 1; k < row.length; k++) {
           const v = parseFloat(String(row[k] ?? '').replace(/[$,\s()]/g, ''));
           if (!isNaN(v) && v > 0) return v;
         }
-        // Try first numeric cell in the next row
         if (i + 1 < allRows.length) {
           const nextRow = allRows[i + 1] as unknown[];
           for (const c of nextRow) {
@@ -171,15 +163,47 @@ function extractTotalRealizedGains(allRows: unknown[][]): number {
   return 0;
 }
 
+function findHeaderRowIndex(allRows: unknown[][]): number {
+  const allCandidates = [
+    ...TICKER_CANDIDATES, ...SHARES_CANDIDATES, ...PRICE_CANDIDATES,
+    ...DATE_CANDIDATES, ...ACTION_CANDIDATES, ...ACCOUNT_CANDIDATES,
+  ].map(normalizeHeader);
+
+  for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+    const row = allRows[i] as unknown[];
+    const nonEmpty = row.filter((c) => String(c ?? '').trim().length > 0);
+    if (nonEmpty.length < 2) continue;
+
+    const cells = nonEmpty.map((c) => normalizeHeader(String(c)));
+    const matchCount = cells.filter((cell) =>
+      allCandidates.some((cand) => cand.length >= 2 && (cell === cand || cell.includes(cand)))
+    ).length;
+
+    if (matchCount >= 2) return i;
+  }
+  return 0;
+}
+
+export interface ManualColumns {
+  ticker?: string;
+  shares?: string;
+  price?: string;
+  date?: string;
+  action?: string;
+  account?: string;
+}
+
 export interface ParseResult {
   transactions: Transaction[];
   errors: string[];
   detectedColumns: Record<string, string>;
   importedRealizedGains: number;
   snapshotPrices: Record<string, number>;
+  fileHeaders: string[];
+  detectedBroker: string | null;
 }
 
-export function parseExcel(file: File, defaultAccount: string): Promise<ParseResult> {
+export function parseExcel(file: File, defaultAccount: string, manualCols?: ManualColumns): Promise<ParseResult> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -190,7 +214,7 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
 
         const allRows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
         if (!allRows.length) {
-          resolve({ transactions: [], errors: ['Sheet is empty'], detectedColumns: {}, importedRealizedGains: 0, snapshotPrices: {} });
+          resolve({ transactions: [], errors: ['Sheet is empty'], detectedColumns: {}, importedRealizedGains: 0, snapshotPrices: {}, fileHeaders: [], detectedBroker: null });
           return;
         }
 
@@ -198,24 +222,25 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         const headers = (allRows[headerRowIdx] as unknown[]).map((h) => String(h ?? '').trim()).filter(Boolean);
         const dataRows = allRows.slice(headerRowIdx + 1);
 
-        const tickerCol       = detectColumn(headers, TICKER_CANDIDATES);
-        const sharesCol       = detectColumn(headers, SHARES_CANDIDATES);
-        const priceCol        = detectColumn(headers, PRICE_CANDIDATES);
-        const dateCol         = detectColumn(headers, DATE_CANDIDATES);
-        const actionCol       = detectColumn(headers, ACTION_CANDIDATES);
-        const accountCol      = detectColumn(headers, ACCOUNT_CANDIDATES);
+        const detectedBroker = detectBroker(headers);
+
+        // Use manual overrides if provided, otherwise auto-detect
+        const tickerCol       = manualCols?.ticker   ?? detectColumn(headers, TICKER_CANDIDATES);
+        const sharesCol       = manualCols?.shares   ?? detectColumn(headers, SHARES_CANDIDATES);
+        const priceCol        = manualCols?.price    ?? detectColumn(headers, PRICE_CANDIDATES);
+        const dateCol         = manualCols?.date     ?? detectColumn(headers, DATE_CANDIDATES);
+        const actionCol       = manualCols?.action   ?? detectColumn(headers, ACTION_CANDIDATES);
+        const accountCol      = manualCols?.account  ?? detectColumn(headers, ACCOUNT_CANDIDATES);
         const currentPriceCol = detectColumn(headers, CURRENT_PRICE_CANDIDATES);
-        const gainCol         = detectColumn(headers, GAIN_CANDIDATES);
 
         const detectedColumns: Record<string, string> = {};
-        if (tickerCol)       detectedColumns['Ticker']          = tickerCol;
-        if (sharesCol)       detectedColumns['Shares']          = sharesCol;
-        if (priceCol)        detectedColumns['Purchase Price']  = priceCol;
-        if (currentPriceCol) detectedColumns['Current Price']   = currentPriceCol;
-        if (gainCol)         detectedColumns['Gain/Loss']       = gainCol;
-        if (dateCol)         detectedColumns['Date']            = dateCol;
-        if (actionCol)       detectedColumns['Action']          = actionCol;
-        if (accountCol)      detectedColumns['Account']         = accountCol;
+        if (tickerCol)       detectedColumns['Ticker']         = tickerCol;
+        if (sharesCol)       detectedColumns['Shares']         = sharesCol;
+        if (priceCol)        detectedColumns['Purchase Price'] = priceCol;
+        if (currentPriceCol) detectedColumns['Current Price']  = currentPriceCol;
+        if (dateCol)         detectedColumns['Date']           = dateCol;
+        if (actionCol)       detectedColumns['Action']         = actionCol;
+        if (accountCol)      detectedColumns['Account']        = accountCol;
 
         const errors: string[] = [];
         if (!tickerCol) errors.push(`Could not find ticker column. Headers: ${headers.join(', ')}`);
@@ -223,7 +248,7 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
         if (!priceCol)  errors.push(`Could not find price column. Headers: ${headers.join(', ')}`);
 
         if (errors.length) {
-          resolve({ transactions: [], errors, detectedColumns, importedRealizedGains: 0, snapshotPrices: {} });
+          resolve({ transactions: [], errors, detectedColumns, importedRealizedGains: 0, snapshotPrices: {}, fileHeaders: headers, detectedBroker });
           return;
         }
 
@@ -247,7 +272,6 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
 
           if (!ticker || ticker.length < 1 || isNaN(shares) || shares <= 0 || isNaN(price) || price <= 0) return;
 
-          // Store snapshot current price (CP column) keyed by ticker
           if (currentPriceIdx >= 0) {
             const cp = parseFloat(String(r[currentPriceIdx] ?? '').replace(/[$,\s]/g, ''));
             if (!isNaN(cp) && cp > 0) snapshotPrices[ticker] = cp;
@@ -270,15 +294,14 @@ export function parseExcel(file: File, defaultAccount: string): Promise<ParseRes
           });
         });
 
-        // Extract pre-computed total realized gains from the sheet
         const importedRealizedGains = extractTotalRealizedGains(allRows);
         if (importedRealizedGains > 0) {
           detectedColumns['Realized Gains'] = `$${importedRealizedGains.toLocaleString()} (imported)`;
         }
 
-        resolve({ transactions, errors: [], detectedColumns, importedRealizedGains, snapshotPrices });
+        resolve({ transactions, errors: [], detectedColumns, importedRealizedGains, snapshotPrices, fileHeaders: headers, detectedBroker });
       } catch (err) {
-        resolve({ transactions: [], errors: [String(err)], detectedColumns: {}, importedRealizedGains: 0, snapshotPrices: {} });
+        resolve({ transactions: [], errors: [String(err)], detectedColumns: {}, importedRealizedGains: 0, snapshotPrices: {}, fileHeaders: [], detectedBroker: null });
       }
     };
     reader.readAsArrayBuffer(file);

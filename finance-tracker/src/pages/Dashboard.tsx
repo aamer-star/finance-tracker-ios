@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Upload, RefreshCw, Clock } from 'lucide-react';
+import { Upload, RefreshCw, Clock, Download } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { computeHoldings, computeRealizedGains, computeTotalNetProfit } from '../utils/portfolio';
 import type { AppData, StockQuote } from '../types';
@@ -171,8 +171,29 @@ export default function Dashboard({ data, quotes, quotesLoading, selectedAccount
 
       {/* Holdings summary table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800">
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
           <h2 className="font-semibold">Holdings</h2>
+          <button
+            onClick={() => {
+              const rows = [['Ticker', 'Account', 'Shares', 'Avg Cost', 'Price', 'Market Value', 'Gain/Loss', 'Return %']];
+              holdings.forEach(h => {
+                const price = priceMap[h.ticker] ?? snapshotPrices[h.ticker] ?? h.avgCostBasis;
+                const mv = h.shares * price;
+                const gl = mv - h.totalCost;
+                const ret = h.totalCost > 0 ? (gl / h.totalCost) * 100 : 0;
+                rows.push([h.ticker, h.account, h.shares.toFixed(4), h.avgCostBasis.toFixed(2), price.toFixed(2), mv.toFixed(2), gl.toFixed(2), ret.toFixed(2) + '%']);
+              });
+              const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `portfolio-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            <Download size={13} /> Export CSV
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

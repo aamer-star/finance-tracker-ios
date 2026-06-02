@@ -117,7 +117,14 @@ export default function Suggestions({ data, quotes, onRefresh }: Props) {
         </button>
       </div>
 
-      {error && (
+      {error && error.includes('credit balance') && (
+        <div className="bg-yellow-500/10 border border-yellow-800/50 rounded-xl px-4 py-3 text-sm text-yellow-300 space-y-1">
+          <p className="font-semibold flex items-center gap-2"><AlertCircle size={14} /> Anthropic API Credits Required</p>
+          <p className="text-yellow-400/80 text-xs">AI Suggestions requires an Anthropic API key with active credits. Go to <span className="font-mono">console.anthropic.com → Plans & Billing</span> and add credits, then set the key in your Netlify environment variables as <span className="font-mono">ANTHROPIC_API_KEY</span>.</p>
+        </div>
+      )}
+
+      {error && !error.includes('credit balance') && (
         <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-800/50 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={14} /> {error}
         </div>
