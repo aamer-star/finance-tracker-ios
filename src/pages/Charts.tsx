@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { LineChart, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { computeHoldings } from '../utils/portfolio';
-import { fetchHistory } from '../utils/stockApi';
 import { format, fromUnixTime } from 'date-fns';
 import type { AppData, StockQuote } from '../types';
 
