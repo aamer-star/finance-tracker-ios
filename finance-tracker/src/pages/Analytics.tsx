@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { computeHoldings, computePortfolioOverTime, computeRealizedGains } from '../utils/portfolio';
+import { fetchHistory } from '../utils/stockApi';
 import { getSector } from '../utils/sectors';
 import type { AppData, StockQuote } from '../types';
 import { format } from 'date-fns';
@@ -35,14 +36,8 @@ export default function Analytics({ data, quotes, selectedAccount }: Props) {
 
   const [spyReturn, setSpyReturn] = useState<number | null>(null);
   useEffect(() => {
-    fetch('/.netlify/functions/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker: 'SPY', range: '1y' }),
-    })
-      .then(r => r.json())
-      .then(json => {
-        const pts = json.points ?? [];
+    fetchHistory('SPY', '1y')
+      .then(pts => {
         if (pts.length >= 2) setSpyReturn(((pts[pts.length - 1].c - pts[0].c) / pts[0].c) * 100);
       })
       .catch(() => {});

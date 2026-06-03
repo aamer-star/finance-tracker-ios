@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { LineChart, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { computeHoldings } from '../utils/portfolio';
+import { fetchHistory } from '../utils/stockApi';
 import { format, fromUnixTime } from 'date-fns';
 import type { AppData, StockQuote } from '../types';
 
@@ -45,19 +46,12 @@ export default function Charts({ data, quotes }: Props) {
   useEffect(() => {
     if (!selected) return;
     setLoading(true);
-    fetch('/.netlify/functions/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker: selected, range }),
-    })
-      .then(r => r.json())
-      .then(json => {
-        setPoints(
-          (json.points ?? []).map((p: { t: number; c: number }) => ({
-            date: dateFmt(p.t, range),
-            price: Math.round(p.c * 100) / 100,
-          }))
-        );
+    fetchHistory(selected, range)
+      .then(pts => {
+        setPoints(pts.map(p => ({
+          date: dateFmt(p.t, range),
+          price: Math.round(p.c * 100) / 100,
+        })));
       })
       .catch(() => setPoints([]))
       .finally(() => setLoading(false));

@@ -27,8 +27,8 @@ import type { AppData, StockQuote } from './types';
 interface AuthUser { id: string; email: string }
 
 export default function App() {
-  // Only load from localStorage if already logged in; otherwise start empty
-  const [data, setData] = useState<AppData>(() => getSession() ? loadData() : emptyData());
+  // Always load from localStorage — login is only needed for cloud sync across devices
+  const [data, setData] = useState<AppData>(() => loadData());
   const [quotes, setQuotes] = useState<Record<string, StockQuote>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -51,7 +51,7 @@ export default function App() {
     setData(d);
     if (user) {
       if (syncTimer.current) clearTimeout(syncTimer.current);
-      syncTimer.current = setTimeout(() => saveToCloud(d), 1500);
+      syncTimer.current = setTimeout(() => saveToCloud(d), 30000);
     }
   }, [user]);
 
