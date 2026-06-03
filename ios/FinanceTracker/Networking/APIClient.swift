@@ -1,0 +1,231 @@
+import Foundation
+
+enum APIError: Error {
+    case badURL
+    case server(String)
+    case decoding
+    case network
+}
+
+/// Talks to the existing Vercel serverless endpoints and Yahoo Finance.
+/// Mirrors src/lib/cloudSync.ts and src/utils/stockApi.ts.
+final class APIClient {
+    static let shared = APIClient()
+    private let session = URLSession(configuration: .default)
+    private let decoder = JSONDecoder()
+    private init() {}
+
+    // MARK: - Generic JSON helpers
+
+    func post<T: Decodable>(_ path: String, body: [String: Any], token: String? = nil) async throws -> T {
+        guard let url = Config.apiURL(path) else { throw APIError.badURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await send(req)
+    }
+
+    func get<T: Decodable>(_ path: String, token: String? = nil) async throws -> T {
+        guard let url = Config.apiURL(path) else { throw APIError.badURL }
+        var req = URLRequest(url: url)
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        return try await send(req)
+    }
+
+    private func send<T: Decodable>(_ req: URLRequest) async throws -> T {
+        let (data, resp): (Data, URLResponse)
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.network
+        }
+        if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
+            if let err = try? decoder.decode(ServerError.self, from: data), let msg = err.error {
+                throw APIError.server(msg)
+            }
+            throw APIError.server("Request failed (\(http.statusCode))")
+        }
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding
+        }
+    }
+
+    private struct ServerError: Decodable { var error: String? }
+
+    // MARK: - Cloud data sync (/api/user-data)
+
+    func loadFromCloud() async -> AppData? {
+        guard let token = await AuthManager.shared.validToken() else { return nil }
+        struct Wrapper: Decodable { var data: AppData? }
+        do {
+            let w: Wrapper = try await get("/api/user-data", token: token)
+            return w.data
+        } catch {
+            return nil
+        }
+    }
+
+    func saveToCloud(_ appData: AppData) async {
+        guard let token = await AuthManager.shared.validToken() else { return }
+        guard let url = Config.apiURL("/api/user-data") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let payload = ["appData": appData]
+            req.httpBody = try JSONEncoder().encode(payload)
+            _ = try await session.data(for: req)
+        } catch {
+            // silent — local data is still persisted
+        }
+    }
+
+    // MARK: - Stock search (/api/search)
+
+    func searchStocks(_ query: String) async -> [StockSearchResult] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        let staticResults = StaticStocks.search(q)
+        guard let encoded = q.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else {
+            return staticResults
+        }
+        struct Resp: Decodable { var results: [StockSearchResult] }
+        do {
+            let r: Resp = try await get("/api/search?q=\(encoded)")
+            return r.results.isEmpty ? staticResults : r.results
+        } catch {
+            return staticResults
+        }
+    }
+
+    // MARK: - Price history (/api/history)
+
+    func fetchHistory(ticker: String, range: String) async -> [PricePoint] {
+        guard let t = ticker.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
+              let r = range.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else { return [] }
+        struct Resp: Decodable { var points: [PricePoint]? }
+        do {
+            let resp: Resp = try await get("/api/history?ticker=\(t)&range=\(r)")
+            return resp.points ?? []
+        } catch {
+            return []
+        }
+    }
+
+    // MARK: - AI chat (/api/chat)
+
+    func chat(messages: [ChatMessage], portfolioContext: String?) async throws -> String {
+        let body: [String: Any] = [
+            "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] },
+            "portfolioContext": portfolioContext ?? ""
+        ]
+        struct Resp: Decodable { var content: String?; var error: String? }
+        let resp: Resp = try await post("/api/chat", body: body)
+        if let err = resp.error { throw APIError.server(err) }
+        return resp.content ?? ""
+    }
+
+    // MARK: - AI suggestions (/api/suggestions)
+
+    struct SuggestionHolding { var ticker: String; var pct: Double; var sector: String }
+
+    func fetchSuggestions(holdings: [SuggestionHolding], totalValue: Double) async -> (suggestions: [AISuggestion], error: String?) {
+        let body: [String: Any] = [
+            "holdings": holdings.map { ["ticker": $0.ticker, "pct": $0.pct, "sector": $0.sector] },
+            "totalValue": totalValue
+        ]
+        struct Resp: Decodable { var suggestions: [AISuggestion]?; var error: String? }
+        do {
+            let r: Resp = try await post("/api/suggestions", body: body)
+            return (r.suggestions ?? [], r.error)
+        } catch let APIError.server(msg) {
+            return ([], msg)
+        } catch {
+            return ([], "Network error. Try again.")
+        }
+    }
+
+    // MARK: - Earnings calendar (/api/calendar)
+
+    func fetchCalendarEvents(tickers: [String], apiKey: String?) async -> [EarningsEvent] {
+        guard !tickers.isEmpty else { return [] }
+        var body: [String: Any] = ["tickers": tickers]
+        if let apiKey, !apiKey.isEmpty { body["apiKey"] = apiKey }
+        struct RawEvent: Decodable { var ticker: String; var date: Double; var epsEstimate: Double? }
+        struct Resp: Decodable { var events: [RawEvent] }
+        do {
+            let r: Resp = try await post("/api/calendar", body: body)
+            return r.events.map {
+                EarningsEvent(ticker: $0.ticker,
+                              date: Date(timeIntervalSince1970: $0.date),
+                              epsEstimate: $0.epsEstimate,
+                              type: .earnings)
+            }
+        } catch {
+            return []
+        }
+    }
+
+    // MARK: - Live quotes (Yahoo Finance via CORS proxy, mirrors stockApi.ts)
+
+    /// Matches JavaScript's encodeURIComponent so a whole URL can be nested as a query value.
+    private static let uriComponentAllowed = CharacterSet(charactersIn:
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
+
+    func fetchQuotes(_ tickers: [String]) async -> [String: StockQuote] {
+        guard !tickers.isEmpty else { return [:] }
+        let symbols = tickers.joined(separator: ",")
+        let fields = "regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,earningsTimestamp,earningsTimestampStart,epsForward,dividendDate"
+        guard let symEnc = symbols.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else { return [:] }
+        let yahoo = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=\(symEnc)&fields=\(fields)"
+        guard let proxied = yahoo.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
+              let url = URL(string: Config.corsProxy + proxied) else { return [:] }
+
+        do {
+            let (data, _) = try await session.data(from: url)
+            let parsed = try JSONDecoder().decode(YahooQuoteResponse.self, from: data)
+            var out: [String: StockQuote] = [:]
+            for item in parsed.quoteResponse?.result ?? [] {
+                guard let ticker = item.symbol, let price = item.regularMarketPrice, price > 0 else { continue }
+                out[ticker] = StockQuote(
+                    ticker: ticker,
+                    name: item.shortName ?? item.longName,
+                    price: price,
+                    change: item.regularMarketChange ?? 0,
+                    changePercent: item.regularMarketChangePercent ?? 0,
+                    previousClose: item.regularMarketPreviousClose ?? 0,
+                    lastUpdated: Date().timeIntervalSince1970 * 1000,
+                    earningsDate: item.earningsTimestamp ?? item.earningsTimestampStart,
+                    epsForward: item.epsForward,
+                    dividendDate: item.dividendDate
+                )
+            }
+            return out
+        } catch {
+            return [:]
+        }
+    }
+
+    private struct YahooQuoteResponse: Decodable {
+        var quoteResponse: Inner?
+        struct Inner: Decodable { var result: [YahooQuote]? }
+    }
+    private struct YahooQuote: Decodable {
+        var symbol: String?
+        var shortName: String?
+        var longName: String?
+        var regularMarketPrice: Double?
+        var regularMarketChange: Double?
+        var regularMarketChangePercent: Double?
+        var regularMarketPreviousClose: Double?
+        var earningsTimestamp: Double?
+        var earningsTimestampStart: Double?
+        var epsForward: Double?
+        var dividendDate: Double?
+    }
+}
