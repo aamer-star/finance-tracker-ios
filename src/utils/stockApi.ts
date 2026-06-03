@@ -110,16 +110,29 @@ export async function fetchAllQuotes(
 const historyCache: Record<string, { points: {t:number;c:number}[]; ts: number }> = {};
 const HISTORY_TTL = 15 * 60 * 1000;
 
+const HISTORY_PARAMS: Record<string, [string, string]> = {
+  '1mo': ['1mo', '1d'], '3mo': ['3mo', '1d'], '6mo': ['6mo', '1wk'],
+  '1y': ['1y', '1wk'], '5y': ['5y', '1mo'],
+};
+
 export async function fetchHistory(ticker: string, range: string): Promise<{t: number; c: number}[]> {
   const cacheKey = `${ticker}-${range}`;
   const cached = historyCache[cacheKey];
   if (cached && Date.now() - cached.ts < HISTORY_TTL) return cached.points;
 
+  const [rangeParam, interval] = HISTORY_PARAMS[range] ?? ['6mo', '1wk'];
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${rangeParam}&interval=${interval}`;
+  const url = `https://corsproxy.io/?url=${encodeURIComponent(yahooUrl)}`;
+
   try {
-    const res = await fetch(`/api/history?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(range)}`);
+    const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
-    const points: {t: number; c: number}[] = data.points ?? [];
+    const result = data?.chart?.result?.[0];
+    if (!result) return [];
+    const timestamps: number[] = result.timestamp ?? [];
+    const closes: number[] = result.indicators?.adjclose?.[0]?.adjclose ?? result.indicators?.quote?.[0]?.close ?? [];
+    const points = timestamps.map((t, i) => ({ t, c: closes[i] })).filter(p => p.c != null && !isNaN(p.c));
     historyCache[cacheKey] = { points, ts: Date.now() };
     return points;
   } catch {
