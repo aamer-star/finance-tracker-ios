@@ -230,7 +230,7 @@ export async function searchStocks(query: string): Promise<StockSearchResult[]> 
   const staticResults = searchStatic(q);
 
   try {
-    const res = await fetch(`/.netlify/functions/search?q=${encodeURIComponent(q)}`);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
     if (!res.ok) return staticResults;
     const json = await res.json();
     const apiResults: StockSearchResult[] = json.results ?? [];

@@ -34,7 +34,7 @@ export function clearSession() {
 
 async function refreshSession(refresh_token: string): Promise<Session | null> {
   try {
-    const res = await fetch('/.netlify/functions/auth', {
+    const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'refresh', refresh_token }),
@@ -57,7 +57,7 @@ export async function getValidToken(): Promise<string | null> {
 
 export async function signUp(email: string, password: string): Promise<{ session: Session | null; error: string | null }> {
   try {
-    const res = await fetch('/.netlify/functions/auth', {
+    const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'signup', email, password }),
@@ -70,7 +70,7 @@ export async function signUp(email: string, password: string): Promise<{ session
 
 export async function signIn(email: string, password: string): Promise<{ session: Session | null; error: string | null }> {
   try {
-    const res = await fetch('/.netlify/functions/auth', {
+    const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'signin', email, password }),

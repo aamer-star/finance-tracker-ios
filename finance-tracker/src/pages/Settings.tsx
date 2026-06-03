@@ -41,7 +41,7 @@ export default function Settings({ data, onRefresh, user: userProp }: Props) {
     setSyncMsg('');
     try {
       const d = loadData();
-      const res = await fetch('/.netlify/functions/user-data', {
+      const res = await fetch('/api/user-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

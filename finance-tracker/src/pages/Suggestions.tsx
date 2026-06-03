@@ -55,7 +55,7 @@ export default function Suggestions({ data, quotes, onRefresh }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/.netlify/functions/suggestions', {
+      const res = await fetch('/api/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(holdingsCtx),

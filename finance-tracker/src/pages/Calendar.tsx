@@ -303,7 +303,7 @@ export default function CalendarPage({ data }: Props) {
     if (!tickers.length) return;
     setLoading(true);
     try {
-      const res = await fetch('/.netlify/functions/calendar', {
+      const res = await fetch('/api/calendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tickers, apiKey: data.apiKey }),

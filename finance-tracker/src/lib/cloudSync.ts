@@ -5,7 +5,7 @@ export async function loadFromCloud(): Promise<AppData | null> {
   const token = await getValidToken();
   if (!token) return null;
   try {
-    const res = await fetch('/.netlify/functions/user-data', {
+    const res = await fetch('/api/user-data', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json();
@@ -19,7 +19,7 @@ export async function saveToCloud(appData: AppData): Promise<void> {
   const token = await getValidToken();
   if (!token) return;
   try {
-    await fetch('/.netlify/functions/user-data', {
+    await fetch('/api/user-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ appData }),
