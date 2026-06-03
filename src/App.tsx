@@ -26,8 +26,18 @@ import type { AppData, StockQuote } from './types';
 
 interface AuthUser { id: string; email: string }
 
+function smartMerge(cloudData: AppData, localData: AppData): AppData {
+  return {
+    ...cloudData,
+    alerts: cloudData.alerts?.length ? cloudData.alerts : (localData.alerts ?? []),
+    simulatorState: cloudData.simulatorState?.trades?.length
+      ? cloudData.simulatorState
+      : (localData.simulatorState ?? { cash: 100000, trades: [] }),
+    calendarTasks: cloudData.calendarTasks?.length ? cloudData.calendarTasks : (localData.calendarTasks ?? []),
+  };
+}
+
 export default function App() {
-  // Always load from localStorage — login is only needed for cloud sync across devices
   const [data, setData] = useState<AppData>(() => migrateLocalStorage(loadData()));
   const [quotes, setQuotes] = useState<Record<string, StockQuote>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
@@ -37,20 +47,20 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => getSession()?.user ?? null);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // On mount, if logged in, load data from cloud
+  const syncData = useCallback((d: AppData) => {
+    saveData(d);
+    setData(d);
+    if (user) {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      syncTimer.current = setTimeout(() => saveToCloud(d), 5000);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       loadFromCloud().then((cloudData) => {
         if (cloudData) {
-          const local = loadData();
-          const merged = {
-            ...cloudData,
-            alerts: cloudData.alerts?.length ? cloudData.alerts : (local.alerts ?? []),
-            simulatorState: cloudData.simulatorState?.trades?.length
-              ? cloudData.simulatorState
-              : (local.simulatorState ?? { cash: 100000, trades: [] }),
-            calendarTasks: cloudData.calendarTasks?.length ? cloudData.calendarTasks : (local.calendarTasks ?? []),
-          };
+          const merged = smartMerge(cloudData, loadData());
           saveData(merged);
           setData(merged);
         }
@@ -63,17 +73,12 @@ export default function App() {
     setData(d);
     if (user) {
       if (syncTimer.current) clearTimeout(syncTimer.current);
-      syncTimer.current = setTimeout(() => saveToCloud(d), 30000);
+      syncTimer.current = setTimeout(() => saveToCloud(d), 5000);
     }
   }, [user]);
 
   const loadQuotes = useCallback(async (d: AppData) => {
-    const tickers = [
-      ...new Set([
-        ...d.transactions.map((t) => t.ticker),
-        ...d.watchlist,
-      ]),
-    ];
+    const tickers = [...new Set([...d.transactions.map((t) => t.ticker), ...d.watchlist])];
     if (!tickers.length) return;
     setQuotesLoading(true);
     const result = await fetchAllQuotes(tickers, d.apiKey || undefined);
@@ -96,13 +101,13 @@ export default function App() {
   const handleAuthSuccess = async (newUser: AuthUser) => {
     setUser(newUser);
     const cloudData = await loadFromCloud();
+    const local = loadData();
     if (cloudData && cloudData.transactions.length > 0) {
-      // Cloud has data — load it onto this device
-      saveData(cloudData);
-      setData(cloudData);
+      const merged = smartMerge(cloudData, local);
+      saveData(merged);
+      setData(merged);
+      await saveToCloud(merged);
     } else {
-      // Cloud is empty — push this device's local data up
-      const local = loadData();
       if (local.transactions.length > 0) await saveToCloud(local);
     }
   };
@@ -164,13 +169,13 @@ export default function App() {
             <Watchlist data={data} quotes={quotes} quotesLoading={quotesLoading}
               onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
           } />
-          <Route path="/alerts" element={<Alerts data={data} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} quotes={quotes} />} />
+          <Route path="/alerts" element={<Alerts data={data} onChange={syncData} quotes={quotes} />} />
           <Route path="/suggestions" element={
             <Suggestions data={data} quotes={quotes} onRefresh={refresh} />
           } />
           <Route path="/targets" element={<Goals data={data} quotes={quotes} />} />
-          <Route path="/simulator" element={<Simulator data={data} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} quotes={quotes} />} />
-          <Route path="/calendar" element={<Calendar data={data} quotes={quotes} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} />} />
+          <Route path="/simulator" element={<Simulator data={data} onChange={syncData} quotes={quotes} />} />
+          <Route path="/calendar" element={<Calendar data={data} quotes={quotes} onChange={syncData} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
           <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />
         </Routes>
