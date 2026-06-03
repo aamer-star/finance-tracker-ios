@@ -7,7 +7,7 @@ import UserNotifications
 /// 5-minute foreground poll). Truly-in-the-background checks would need
 /// BGTaskScheduler + the Background Modes capability — a natural follow-up.
 @MainActor
-final class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
+final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
     private override init() { super.init() }
 

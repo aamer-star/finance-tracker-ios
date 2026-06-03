@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Port of src/pages/Dashboard.tsx — live clock, four stat tiles, holdings table.
 struct DashboardView: View {

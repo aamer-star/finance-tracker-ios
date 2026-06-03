@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct AuthUser: Codable, Equatable {
     var id: String
