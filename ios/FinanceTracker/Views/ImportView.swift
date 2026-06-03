@@ -49,7 +49,7 @@ struct ImportView: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Import Transactions").font(.title3.weight(.bold))
-            Text("Export a CSV from your broker (Schwab, Fidelity, Robinhood, Vanguard, and more are auto-detected). Columns are matched automatically.")
+            Text("Pick a CSV or Excel (.xlsx) export from your broker (Schwab, Fidelity, Robinhood, Vanguard, and more are auto-detected). Columns are matched automatically.")
                 .font(.footnote).foregroundStyle(Theme.mutedText)
         }
     }
@@ -105,12 +105,23 @@ struct ImportView: View {
             fileName = url.lastPathComponent
             do {
                 let data = try Data(contentsOf: url)
+                let acct = account.isEmpty ? "Imported" : account
+                // .xlsx files are ZIP archives starting with "PK".
+                if data.prefix(2) == Data([0x50, 0x4B]) {
+                    if let rows = XLSXReader.rows(from: data) {
+                        self.result = CSVImporter.parse(rows: rows, defaultAccount: acct)
+                    } else {
+                        parseError = "Couldn't read this spreadsheet. Try exporting it as CSV and importing again."
+                        self.result = nil
+                    }
+                    return
+                }
                 guard let text = decodeCSV(data) else {
-                    parseError = "This looks like a binary .xlsx file. Please export it as CSV from your broker or a spreadsheet app, then import again."
+                    parseError = "Unsupported file. Please choose a CSV or Excel (.xlsx) file."
                     self.result = nil
                     return
                 }
-                self.result = CSVImporter.parse(csv: text, defaultAccount: account.isEmpty ? "Imported" : account)
+                self.result = CSVImporter.parse(csv: text, defaultAccount: acct)
             } catch {
                 parseError = "Could not read file: \(error.localizedDescription)"
             }

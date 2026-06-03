@@ -119,11 +119,24 @@ final class DataStore: ObservableObject {
         let result = await APIClient.shared.fetchQuotes(tickers)
         for (k, v) in result { quotes[k] = v }
         quotesLoading = false
+        checkAlerts()
     }
 
     func loadQuote(_ ticker: String) async {
         let result = await APIClient.shared.fetchQuotes([ticker])
         for (k, v) in result { quotes[k] = v }
+        checkAlerts()
+    }
+
+    /// Fire notifications for any newly-met alerts and persist their triggered state.
+    private func checkAlerts() {
+        let fired = Set(NotificationManager.shared.evaluate(alerts: data.alerts, quotes: quotes))
+        guard !fired.isEmpty else { return }
+        commit { d in
+            for i in d.alerts.indices where fired.contains(d.alerts[i].id) {
+                d.alerts[i].triggered = true
+            }
+        }
     }
 
     func startQuotePolling() {

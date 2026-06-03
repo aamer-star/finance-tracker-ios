@@ -38,6 +38,10 @@ struct RootView: View {
             ImportView()
         }
         .task {
+            NotificationManager.shared.configure()
+            if !store.data.alerts.isEmpty {
+                await NotificationManager.shared.requestAuthorization()
+            }
             await store.bootstrapCloud()
             await store.loadQuotes()
             store.startQuotePolling()

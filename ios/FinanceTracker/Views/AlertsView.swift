@@ -103,7 +103,10 @@ struct AddAlertView: View {
             triggered: false
         )
         store.commit { $0.alerts.append(alert) }
-        Task { await store.loadQuote(alert.ticker) }
+        Task {
+            await NotificationManager.shared.requestAuthorization()
+            await store.loadQuote(alert.ticker)
+        }
         dismiss()
     }
 }

@@ -39,7 +39,11 @@ enum CSVImporter {
     // MARK: - Public
 
     static func parse(csv: String, defaultAccount: String) -> Result {
-        let rows = parseCSVRows(csv)
+        parse(rows: parseCSVRows(csv), defaultAccount: defaultAccount)
+    }
+
+    /// Shared row processor used by both the CSV tokenizer and the XLSX reader.
+    static func parse(rows: [[String]], defaultAccount: String) -> Result {
         guard !rows.isEmpty else {
             return Result(transactions: [], errors: ["File is empty"], detectedColumns: [:], importedRealizedGains: 0, snapshotPrices: [:], detectedBroker: nil)
         }
@@ -191,6 +195,15 @@ enum CSVImporter {
             df.dateFormat = f
             if let d = df.date(from: s) {
                 df.dateFormat = "yyyy-MM-dd"
+                return df.string(from: d)
+            }
+        }
+        // Excel serial date (days since 1899-12-30): xlsx stores dates as numbers.
+        if let serial = Double(s), serial >= 20000, serial <= 80000 {
+            if let epoch = DateComponents(calendar: .current, year: 1899, month: 12, day: 30).date {
+                let d = epoch.addingTimeInterval(serial * 86400)
+                df.dateFormat = "yyyy-MM-dd"
+                df.timeZone = TimeZone(identifier: "UTC")
                 return df.string(from: d)
             }
         }
