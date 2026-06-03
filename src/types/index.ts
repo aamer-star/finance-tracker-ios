@@ -73,6 +73,16 @@ export interface SimState {
   trades: SimTrade[];
 }
 
+export interface CalendarTask {
+  id: string;
+  title: string;
+  date: string;
+  note: string;
+  priority: 'low' | 'medium' | 'high';
+  completed: boolean;
+  createdAt: string;
+}
+
 export interface AppData {
   transactions: Transaction[];
   watchlist: string[];
@@ -82,4 +92,5 @@ export interface AppData {
   snapshotPrices: Record<string, number>;
   alerts: PriceAlert[];
   simulatorState: SimState;
+  calendarTasks: CalendarTask[];
 }

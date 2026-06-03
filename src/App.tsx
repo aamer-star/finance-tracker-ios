@@ -18,7 +18,7 @@ import Simulator from './pages/Simulator';
 import Calendar from './pages/Calendar';
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
-import { loadData, saveData, emptyData } from './utils/storage';
+import { loadData, saveData, emptyData, migrateLocalStorage } from './utils/storage';
 import { fetchAllQuotes, fetchQuote } from './utils/stockApi';
 import { getSession, clearSession } from './lib/auth';
 import { loadFromCloud, saveToCloud } from './lib/cloudSync';
@@ -28,7 +28,7 @@ interface AuthUser { id: string; email: string }
 
 export default function App() {
   // Always load from localStorage — login is only needed for cloud sync across devices
-  const [data, setData] = useState<AppData>(() => loadData());
+  const [data, setData] = useState<AppData>(() => migrateLocalStorage(loadData()));
   const [quotes, setQuotes] = useState<Record<string, StockQuote>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -41,7 +41,19 @@ export default function App() {
   useEffect(() => {
     if (user) {
       loadFromCloud().then((cloudData) => {
-        if (cloudData) { saveData(cloudData); setData(cloudData); }
+        if (cloudData) {
+          const local = loadData();
+          const merged = {
+            ...cloudData,
+            alerts: cloudData.alerts?.length ? cloudData.alerts : (local.alerts ?? []),
+            simulatorState: cloudData.simulatorState?.trades?.length
+              ? cloudData.simulatorState
+              : (local.simulatorState ?? { cash: 100000, trades: [] }),
+            calendarTasks: cloudData.calendarTasks?.length ? cloudData.calendarTasks : (local.calendarTasks ?? []),
+          };
+          saveData(merged);
+          setData(merged);
+        }
       });
     }
   }, []);
@@ -158,7 +170,7 @@ export default function App() {
           } />
           <Route path="/targets" element={<Goals data={data} quotes={quotes} />} />
           <Route path="/simulator" element={<Simulator data={data} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} quotes={quotes} />} />
-          <Route path="/calendar" element={<Calendar data={data} quotes={quotes} />} />
+          <Route path="/calendar" element={<Calendar data={data} quotes={quotes} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
           <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />
         </Routes>

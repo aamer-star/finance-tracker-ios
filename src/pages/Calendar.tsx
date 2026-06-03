@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { CalendarDays, TrendingUp, DollarSign, AlertCircle, Clock, RefreshCw, X, Plus, Trash2, CheckCircle, Circle, Bell } from 'lucide-react';
 import { computeHoldings } from '../utils/portfolio';
-import type { AppData, StockQuote } from '../types';
+import type { AppData, CalendarTask, StockQuote } from '../types';
 
 interface Props {
   data: AppData;
+  onChange: (d: AppData) => void;
   quotes: Record<string, StockQuote>;
 }
 
@@ -16,22 +17,7 @@ interface CalEvent {
   revenueEstimate?: number | null;
 }
 
-interface Task {
-  id: string;
-  title: string;
-  date: string;
-  note: string;
-  priority: 'low' | 'medium' | 'high';
-  completed: boolean;
-  createdAt: string;
-}
-
-const TASKS_KEY = 'ft_tasks';
-
-function loadTasks(): Task[] {
-  try { return JSON.parse(localStorage.getItem(TASKS_KEY) ?? '[]'); } catch { return []; }
-}
-function saveTasks(t: Task[]) { localStorage.setItem(TASKS_KEY, JSON.stringify(t)); }
+type Task = CalendarTask;
 
 function daysUntil(date: Date): number {
   return Math.round((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -270,7 +256,7 @@ function DayPopup({ day, month, year, events, tasks, onClose }: {
   );
 }
 
-export default function CalendarPage({ data }: Props) {
+export default function CalendarPage({ data, onChange }: Props) {
   const holdings = computeHoldings(data.transactions);
   const tickers = useMemo(() => holdings.map(h => h.ticker), [holdings]);
 
@@ -281,7 +267,8 @@ export default function CalendarPage({ data }: Props) {
   const [popup, setPopup] = useState<{ day: number; month: number; year: number } | null>(null);
 
   // Tasks state
-  const [tasks, setTasks] = useState<Task[]>(loadTasks);
+  const tasks: Task[] = data.calendarTasks ?? [];
+  const setTasks = (next: Task[]) => onChange({ ...data, calendarTasks: next });
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDate, setTaskDate] = useState('');
   const [taskNote, setTaskNote] = useState('');
@@ -334,18 +321,18 @@ export default function CalendarPage({ data }: Props) {
       createdAt: new Date().toISOString().slice(0, 10),
     };
     const next = [...tasks, t].sort((a, b) => a.date.localeCompare(b.date));
-    setTasks(next); saveTasks(next);
+    setTasks(next);
     setTaskTitle(''); setTaskDate(''); setTaskNote('');
   };
 
   const toggleTask = (id: string) => {
     const next = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
-    setTasks(next); saveTasks(next);
+    setTasks(next);
   };
 
   const deleteTask = (id: string) => {
     const next = tasks.filter(t => t.id !== id);
-    setTasks(next); saveTasks(next);
+    setTasks(next);
   };
 
   const groups = groupEvents(allEvents);

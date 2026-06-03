@@ -11,7 +11,35 @@ const defaults: AppData = {
   snapshotPrices: {},
   alerts: [],
   simulatorState: { cash: 100000, trades: [] },
+  calendarTasks: [],
 };
+
+export function migrateLocalStorage(current: AppData): AppData {
+  let changed = false;
+  const d = { ...current };
+  try {
+    const oldAlerts = localStorage.getItem('ft_price_alerts');
+    if (oldAlerts && (!d.alerts || d.alerts.length === 0)) {
+      d.alerts = JSON.parse(oldAlerts) ?? [];
+      localStorage.removeItem('ft_price_alerts');
+      changed = true;
+    }
+    const oldSim = localStorage.getItem('ft_simulator');
+    if (oldSim && (!d.simulatorState?.trades?.length)) {
+      d.simulatorState = JSON.parse(oldSim) ?? { cash: 100000, trades: [] };
+      localStorage.removeItem('ft_simulator');
+      changed = true;
+    }
+    const oldTasks = localStorage.getItem('ft_tasks');
+    if (oldTasks && (!d.calendarTasks || d.calendarTasks.length === 0)) {
+      d.calendarTasks = JSON.parse(oldTasks) ?? [];
+      localStorage.removeItem('ft_tasks');
+      changed = true;
+    }
+  } catch { /* ignore */ }
+  if (changed) saveData(d);
+  return d;
+}
 
 export function emptyData(): AppData {
   return { ...defaults };
