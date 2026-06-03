@@ -37,6 +37,7 @@ export default function Charts({ data, quotes }: Props) {
   const [selected, setSelected] = useState('');
   const [range, setRange] = useState('6mo');
   const [points, setPoints] = useState<{ date: string; price: number }[]>([]);
+  const [chartError, setChartError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,14 +47,17 @@ export default function Charts({ data, quotes }: Props) {
   useEffect(() => {
     if (!selected) return;
     setLoading(true);
-    fetchHistory(selected, range)
-      .then(pts => {
-        setPoints(pts.map(p => ({
+    setChartError('');
+    fetch(`/api/history?ticker=${encodeURIComponent(selected)}&range=${encodeURIComponent(range)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.debug) setChartError(String(data.debug));
+        setPoints((data.points ?? []).map((p: {t:number;c:number}) => ({
           date: dateFmt(p.t, range),
           price: Math.round(p.c * 100) / 100,
         })));
       })
-      .catch(() => setPoints([]))
+      .catch(e => { setChartError(String(e)); setPoints([]); })
       .finally(() => setLoading(false));
   }, [selected, range]);
 
@@ -171,8 +175,9 @@ export default function Charts({ data, quotes }: Props) {
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="h-64 flex items-center justify-center text-gray-600 text-sm">
-            No chart data available
+          <div className="h-64 flex flex-col items-center justify-center text-gray-600 text-sm gap-2">
+            <span>No chart data available</span>
+            {chartError && <span className="text-xs text-red-400 max-w-xs text-center break-all">{chartError}</span>}
           </div>
         )}
       </div>

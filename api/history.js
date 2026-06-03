@@ -62,14 +62,16 @@ module.exports = async (req, res) => {
     });
 
     const json = JSON.parse(result.body);
-    if (json?.chart?.error || !json?.chart?.result?.[0]) return res.status(200).json({ points: [] });
+    if (json?.chart?.error || !json?.chart?.result?.[0]) {
+      return res.status(200).json({ points: [], debug: json?.chart?.error ?? 'no result' });
+    }
 
     const r = json.chart.result[0];
     const timestamps = r.timestamp ?? [];
     const closes = r.indicators?.adjclose?.[0]?.adjclose ?? r.indicators?.quote?.[0]?.close ?? [];
     const points = timestamps.map((t, i) => ({ t, c: closes[i] })).filter(p => p.c != null && !isNaN(p.c));
     res.status(200).json({ points });
-  } catch {
-    res.status(200).json({ points: [] });
+  } catch (e) {
+    return res.status(200).json({ points: [], debug: e.message });
   }
 };
