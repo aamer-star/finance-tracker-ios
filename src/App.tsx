@@ -152,12 +152,12 @@ export default function App() {
             <Watchlist data={data} quotes={quotes} quotesLoading={quotesLoading}
               onRefresh={refresh} onFetchQuote={fetchSingleQuote} />
           } />
-          <Route path="/alerts" element={<Alerts quotes={quotes} />} />
+          <Route path="/alerts" element={<Alerts data={data} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} quotes={quotes} />} />
           <Route path="/suggestions" element={
             <Suggestions data={data} quotes={quotes} onRefresh={refresh} />
           } />
           <Route path="/targets" element={<Goals data={data} quotes={quotes} />} />
-          <Route path="/simulator" element={<Simulator quotes={quotes} />} />
+          <Route path="/simulator" element={<Simulator data={data} onChange={(d) => { saveData(d); setData(d); if (user) { if (syncTimer.current) clearTimeout(syncTimer.current); syncTimer.current = setTimeout(() => saveToCloud(d), 30000); } }} quotes={quotes} />} />
           <Route path="/calendar" element={<Calendar data={data} quotes={quotes} />} />
           <Route path="/chat" element={<Chat data={data} quotes={quotes} />} />
           <Route path="/settings" element={<Settings data={data} onRefresh={refresh} user={user} />} />

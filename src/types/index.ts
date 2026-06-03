@@ -50,12 +50,36 @@ export interface PortfolioSnapshot {
   totalCost: number;
 }
 
+export interface PriceAlert {
+  id: string;
+  ticker: string;
+  targetPrice: number;
+  condition: 'above' | 'below';
+  createdAt: number;
+  triggered: boolean;
+}
+
+export interface SimTrade {
+  id: string;
+  ticker: string;
+  action: 'BUY' | 'SELL';
+  shares: number;
+  price: number;
+  date: string;
+}
+
+export interface SimState {
+  cash: number;
+  trades: SimTrade[];
+}
+
 export interface AppData {
   transactions: Transaction[];
   watchlist: string[];
   apiKey: string;
   accounts: string[];
-  // Imported directly from spreadsheet when pre-computed values are available
   realizedGainsFromImport: number;
-  snapshotPrices: Record<string, number>; // ticker → current price from sheet's CP column
+  snapshotPrices: Record<string, number>;
+  alerts: PriceAlert[];
+  simulatorState: SimState;
 }

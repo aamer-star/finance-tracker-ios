@@ -1,38 +1,22 @@
 import { useState, useEffect } from 'react';
 import { Bell, BellRing, Plus, Trash2 } from 'lucide-react';
-import type { StockQuote } from '../types';
+import type { AppData, PriceAlert, StockQuote } from '../types';
 
 interface Props {
+  data: AppData;
+  onChange: (d: AppData) => void;
   quotes: Record<string, StockQuote>;
-}
-
-interface PriceAlert {
-  id: string;
-  ticker: string;
-  targetPrice: number;
-  condition: 'above' | 'below';
-  createdAt: number;
-  triggered: boolean;
-}
-
-const KEY = 'ft_price_alerts';
-
-function loadAlerts(): PriceAlert[] {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '[]'); } catch { return []; }
-}
-function saveAlerts(a: PriceAlert[]) {
-  localStorage.setItem(KEY, JSON.stringify(a));
 }
 
 function fmt(n: number) { return `$${n.toFixed(2)}`; }
 
-export default function Alerts({ quotes }: Props) {
-  const [alerts, setAlerts] = useState<PriceAlert[]>(loadAlerts);
+export default function Alerts({ data, onChange, quotes }: Props) {
+  const alerts = data.alerts ?? [];
+  const setAlerts = (next: PriceAlert[]) => onChange({ ...data, alerts: next });
   const [ticker, setTicker] = useState('');
   const [price, setPrice] = useState('');
   const [condition, setCondition] = useState<'above' | 'below'>('above');
 
-  // Check alerts against current quotes whenever quotes update
   useEffect(() => {
     const updated = alerts.map(a => {
       const q = quotes[a.ticker];
@@ -41,7 +25,7 @@ export default function Alerts({ quotes }: Props) {
       return { ...a, triggered };
     });
     const changed = updated.some((a, i) => a.triggered !== alerts[i]?.triggered);
-    if (changed) { setAlerts(updated); saveAlerts(updated); }
+    if (changed) setAlerts(updated);
   }, [quotes]);
 
   const add = () => {
@@ -51,15 +35,11 @@ export default function Alerts({ quotes }: Props) {
     const q = quotes[t];
     const triggered = q ? (condition === 'above' ? q.price >= p : q.price <= p) : false;
     const a: PriceAlert = { id: Date.now().toString(), ticker: t, targetPrice: p, condition, createdAt: Date.now(), triggered };
-    const next = [...alerts, a];
-    setAlerts(next); saveAlerts(next);
+    setAlerts([...alerts, a]);
     setTicker(''); setPrice('');
   };
 
-  const remove = (id: string) => {
-    const next = alerts.filter(a => a.id !== id);
-    setAlerts(next); saveAlerts(next);
-  };
+  const remove = (id: string) => setAlerts(alerts.filter(a => a.id !== id));
 
   const triggered = alerts.filter(a => a.triggered);
   const pending = alerts.filter(a => !a.triggered);

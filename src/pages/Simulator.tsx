@@ -1,18 +1,11 @@
 import { useState, useMemo } from 'react';
 import { FlaskConical, TrendingUp, TrendingDown, Plus, Minus, RotateCcw } from 'lucide-react';
-import type { StockQuote } from '../types';
+import type { AppData, SimState, SimTrade, StockQuote } from '../types';
 
 interface Props {
+  data: AppData;
+  onChange: (d: AppData) => void;
   quotes: Record<string, StockQuote>;
-}
-
-interface SimTrade {
-  id: string;
-  ticker: string;
-  action: 'BUY' | 'SELL';
-  shares: number;
-  price: number;
-  date: string;
 }
 
 interface SimHolding {
@@ -22,26 +15,15 @@ interface SimHolding {
   totalCost: number;
 }
 
-const KEY = 'ft_simulator';
 const STARTING_CASH = 100000;
-
-interface SimState {
-  cash: number;
-  trades: SimTrade[];
-}
-
-function loadSim(): SimState {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? 'null') ?? { cash: STARTING_CASH, trades: [] }; }
-  catch { return { cash: STARTING_CASH, trades: [] }; }
-}
-function saveSim(s: SimState) { localStorage.setItem(KEY, JSON.stringify(s)); }
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-export default function Simulator({ quotes }: Props) {
-  const [sim, setSim] = useState<SimState>(loadSim);
+export default function Simulator({ data, onChange, quotes }: Props) {
+  const sim: SimState = data.simulatorState ?? { cash: STARTING_CASH, trades: [] };
+  const setSim = (next: SimState) => onChange({ ...data, simulatorState: next });
   const [ticker, setTicker] = useState('');
   const [shares, setShares] = useState('');
   const [action, setAction] = useState<'BUY' | 'SELL'>('BUY');
@@ -116,18 +98,16 @@ export default function Simulator({ quotes }: Props) {
       price: q.price,
       date: new Date().toISOString().slice(0, 10),
     };
-    const next: SimState = {
+    setSim({
       cash: action === 'BUY' ? sim.cash - cost : sim.cash + cost,
       trades: [...sim.trades, trade],
-    };
-    setSim(next); saveSim(next);
+    });
     setTicker(''); setShares('');
   };
 
   const reset = () => {
     if (!confirm('Reset simulator? All virtual trades will be lost.')) return;
-    const fresh = { cash: STARTING_CASH, trades: [] };
-    setSim(fresh); saveSim(fresh);
+    setSim({ cash: STARTING_CASH, trades: [] });
   };
 
   return (

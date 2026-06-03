@@ -9,6 +9,8 @@ const defaults: AppData = {
   accounts: [],
   realizedGainsFromImport: 0,
   snapshotPrices: {},
+  alerts: [],
+  simulatorState: { cash: 100000, trades: [] },
 };
 
 export function emptyData(): AppData {
