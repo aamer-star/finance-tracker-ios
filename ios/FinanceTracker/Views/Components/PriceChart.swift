@@ -51,7 +51,7 @@ struct PriceChart: View {
                 .chartXAxis {
                     AxisMarks { _ in
                         AxisGridLine().foregroundStyle(Theme.surfaceBorder.opacity(0.5))
-                        AxisValueLabel(format: .dateTime.month(.abbreviated)).font(.caption2)
+                        AxisValueLabel().font(.caption2)   // auto-formats: times for intraday, dates for longer ranges
                     }
                 }
                 .frame(minHeight: 220)
@@ -66,6 +66,7 @@ struct RangePicker: View {
 
     struct Option: Identifiable { var id: String { value }; let value: String; let label: String }
     private let options: [Option] = [
+        .init(value: "1d", label: "1D"), .init(value: "1w", label: "1W"),
         .init(value: "1mo", label: "1M"), .init(value: "3mo", label: "3M"),
         .init(value: "6mo", label: "6M"), .init(value: "1y", label: "1Y"),
         .init(value: "5y", label: "5Y")

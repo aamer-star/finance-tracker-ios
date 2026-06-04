@@ -122,6 +122,13 @@ final class APIClient {
     // MARK: - Price history (/api/history)
 
     func fetchHistory(ticker: String, range: String) async -> [PricePoint] {
+        // Intraday ranges aren't in the backend's params map, so fetch them straight
+        // from Yahoo's v8 chart endpoint (no crumb needed) via the CORS proxy.
+        switch range {
+        case "1d": return await fetchYahooChart(ticker, yahooRange: "1d", interval: "5m")
+        case "1w": return await fetchYahooChart(ticker, yahooRange: "5d", interval: "15m")
+        default: break
+        }
         guard let t = ticker.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
               let r = range.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else { return [] }
         struct Resp: Decodable { var points: [PricePoint]? }
@@ -131,6 +138,36 @@ final class APIClient {
         } catch {
             return []
         }
+    }
+
+    private func fetchYahooChart(_ ticker: String, yahooRange: String, interval: String) async -> [PricePoint] {
+        let yahoo = "https://query1.finance.yahoo.com/v8/finance/chart/\(ticker.uppercased())?range=\(yahooRange)&interval=\(interval)"
+        guard let proxied = yahoo.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
+              let url = URL(string: Config.corsProxy + proxied) else { return [] }
+        do {
+            let request = URLRequest(url: url, timeoutInterval: 10)
+            let (data, _) = try await session.data(for: request)
+            let parsed = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+            guard let result = parsed.chart?.result?.first, let ts = result.timestamp else { return [] }
+            let closes = result.indicators?.adjclose?.first?.adjclose
+                ?? result.indicators?.quote?.first?.close ?? []
+            var points: [PricePoint] = []
+            for (i, t) in ts.enumerated() where i < closes.count {
+                if let c = closes[i] { points.append(PricePoint(t: Double(t), c: c)) }
+            }
+            return points
+        } catch {
+            return []
+        }
+    }
+
+    private struct YahooChartResponse: Decodable {
+        var chart: ChartBlock?
+        struct ChartBlock: Decodable { var result: [ChartResult]? }
+        struct ChartResult: Decodable { var timestamp: [Int]?; var indicators: Indicators? }
+        struct Indicators: Decodable { var quote: [Quote]?; var adjclose: [AdjClose]? }
+        struct Quote: Decodable { var close: [Double?]? }
+        struct AdjClose: Decodable { var adjclose: [Double?]? }
     }
 
     // MARK: - AI chat (/api/chat)
