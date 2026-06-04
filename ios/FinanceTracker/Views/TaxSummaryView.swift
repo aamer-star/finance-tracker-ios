@@ -20,6 +20,10 @@ struct TaxSummaryView: View {
             Theme.background.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 16) {
+                    Text("Calculated automatically from your buy/sell transactions (FIFO lot matching). Import or add transactions to populate it — there's nothing to enter here.")
+                        .font(.caption).foregroundStyle(Theme.mutedText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         StatCard(label: "Short-Term Realized", value: Format.currency(shortTerm),
                                  sub: "Taxed as income", positive: shortTerm >= 0)

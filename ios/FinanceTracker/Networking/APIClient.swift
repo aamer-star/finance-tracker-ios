@@ -11,7 +11,12 @@ enum APIError: Error {
 /// Mirrors src/lib/cloudSync.ts and src/utils/stockApi.ts.
 final class APIClient {
     static let shared = APIClient()
-    private let session = URLSession(configuration: .default)
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 20
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
     private let decoder = JSONDecoder()
     private init() {}
 
@@ -179,8 +184,45 @@ final class APIClient {
     private static let uriComponentAllowed = CharacterSet(charactersIn:
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
 
+    /// Fetches quotes for the given tickers.
+    ///
+    /// Yahoo's v7 quote endpoint now requires a crumb/cookie and rejects anonymous
+    /// requests (even via a CORS proxy) with 401, so we treat it as best-effort and
+    /// fall back to deriving the latest price from `/api/history` — which the backend
+    /// already authenticates with a crumb. That keeps quotes working reliably.
     func fetchQuotes(_ tickers: [String]) async -> [String: StockQuote] {
         guard !tickers.isEmpty else { return [:] }
+        var out = await fetchQuotesViaProxy(tickers)
+        let missing = tickers.filter { out[$0] == nil }
+        if !missing.isEmpty {
+            await withTaskGroup(of: (String, StockQuote?).self) { group in
+                for t in missing {
+                    group.addTask { (t, await self.quoteFromHistory(t)) }
+                }
+                for await (t, quote) in group {
+                    if let quote { out[t] = quote }
+                }
+            }
+        }
+        return out
+    }
+
+    /// Derives a quote from daily history (last close = price, prior close = previous).
+    private func quoteFromHistory(_ ticker: String) async -> StockQuote? {
+        let points = await fetchHistory(ticker: ticker, range: "1mo")
+        guard let last = points.last, last.c > 0 else { return nil }
+        let prev = points.count >= 2 ? points[points.count - 2].c : last.c
+        let change = last.c - prev
+        let pct = prev != 0 ? change / prev * 100 : 0
+        return StockQuote(
+            ticker: ticker, name: nil, price: last.c, change: change,
+            changePercent: pct, previousClose: prev,
+            lastUpdated: Date().timeIntervalSince1970 * 1000,
+            earningsDate: nil, epsForward: nil, dividendDate: nil
+        )
+    }
+
+    private func fetchQuotesViaProxy(_ tickers: [String]) async -> [String: StockQuote] {
         let symbols = tickers.joined(separator: ",")
         let fields = "regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,earningsTimestamp,earningsTimestampStart,epsForward,dividendDate"
         guard let symEnc = symbols.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else { return [:] }
@@ -189,7 +231,9 @@ final class APIClient {
               let url = URL(string: Config.corsProxy + proxied) else { return [:] }
 
         do {
-            let (data, _) = try await session.data(from: url)
+            // Short timeout: if the proxy/Yahoo is unavailable, fall back to history quickly.
+            let request = URLRequest(url: url, timeoutInterval: 8)
+            let (data, _) = try await session.data(for: request)
             let parsed = try JSONDecoder().decode(YahooQuoteResponse.self, from: data)
             var out: [String: StockQuote] = [:]
             for item in parsed.quoteResponse?.result ?? [] {

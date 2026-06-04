@@ -60,7 +60,7 @@ struct SimulatorView: View {
                 .padding(16)
             }
         }
-        .navigationTitle("Paper Trading")
+        .navigationTitle("Stock Simulator")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showTrade = true } label: { Image(systemName: "plus") }

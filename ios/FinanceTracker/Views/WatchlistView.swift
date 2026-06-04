@@ -81,8 +81,10 @@ struct WatchlistView: View {
                                     Text(Format.currency(q.price)).font(.subheadline.weight(.medium)).foregroundStyle(.white)
                                     Text(Format.percent(q.changePercent)).font(.caption2).foregroundStyle(Theme.gainColor(q.change))
                                 }
-                            } else {
+                            } else if store.quotesLoading {
                                 ProgressView()
+                            } else {
+                                Text("—").foregroundStyle(Theme.mutedText)
                             }
                         }
                         .padding(.vertical, 10)

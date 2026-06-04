@@ -71,7 +71,7 @@ struct MoreView: View {
                 NavigationLink { GoalsView() } label: { Label("Goals", systemImage: "target") }
             }
             Section("Markets") {
-                NavigationLink { SimulatorView() } label: { Label("Paper Trading", systemImage: "gamecontroller.fill") }
+                NavigationLink { SimulatorView() } label: { Label("Stock Simulator", systemImage: "gamecontroller.fill") }
                 NavigationLink { CalendarView() } label: { Label("Earnings Calendar", systemImage: "calendar") }
                 NavigationLink { NewsView() } label: { Label("News", systemImage: "newspaper.fill") }
             }
