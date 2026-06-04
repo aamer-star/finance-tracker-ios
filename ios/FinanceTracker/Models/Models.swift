@@ -129,13 +129,14 @@ struct AppData: Codable, Hashable {
     var simulatorState: SimState = .initial
     var calendarTasks: [CalendarTask] = []
     var goals: [Goal] = []          // local "ft_goals" promoted into the synced document
+    var hiddenChartTickers: [String] = []   // tickers the user removed from the Charts chips
 
     static let empty = AppData()
 
     // Tolerate missing keys coming back from the cloud / older payloads.
     enum CodingKeys: String, CodingKey {
         case transactions, watchlist, apiKey, accounts, realizedGainsFromImport
-        case snapshotPrices, alerts, simulatorState, calendarTasks, goals
+        case snapshotPrices, alerts, simulatorState, calendarTasks, goals, hiddenChartTickers
     }
 
     init() {}
@@ -152,6 +153,7 @@ struct AppData: Codable, Hashable {
         simulatorState = (try? c.decode(SimState.self, forKey: .simulatorState)) ?? .initial
         calendarTasks = (try? c.decode([CalendarTask].self, forKey: .calendarTasks)) ?? []
         goals = (try? c.decode([Goal].self, forKey: .goals)) ?? []
+        hiddenChartTickers = (try? c.decode([String].self, forKey: .hiddenChartTickers)) ?? []
     }
 }
 

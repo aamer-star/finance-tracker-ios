@@ -73,17 +73,32 @@ struct ChartsView: View {
     }
 
     private var holdingChips: some View {
-        let tickers = store.trackedTickers.isEmpty ? ["AAPL", "MSFT", "NVDA", "SPY"] : store.trackedTickers
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(tickers, id: \.self) { t in
-                    let isSel = selected == t
-                    Button { select(t) } label: {
-                        Text(t).font(.caption.weight(.medium))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(isSel ? Theme.accent.opacity(0.15) : Theme.surface)
-                            .foregroundStyle(isSel ? Theme.accent : Theme.mutedText)
-                            .clipShape(Capsule())
+        let visible = store.trackedTickers.filter { !store.data.hiddenChartTickers.contains($0) }
+        let tickers = visible.isEmpty ? ["AAPL", "MSFT", "NVDA", "SPY"] : visible
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("YOUR TICKERS").font(.caption2.weight(.semibold)).foregroundStyle(Theme.mutedText)
+                Spacer()
+                if !visible.isEmpty {
+                    Text("Long-press to remove").font(.caption2).foregroundStyle(Theme.mutedText)
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tickers, id: \.self) { t in
+                        let isSel = selected == t
+                        Button { select(t) } label: {
+                            Text(t).font(.caption.weight(.medium))
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(isSel ? Theme.accent.opacity(0.15) : Theme.surface)
+                                .foregroundStyle(isSel ? Theme.accent : Theme.mutedText)
+                                .clipShape(Capsule())
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) { removeFromCharts(t) } label: {
+                                Label("Remove from Charts", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }
@@ -149,12 +164,22 @@ struct ChartsView: View {
     }
 
     private func select(_ ticker: String) {
-        selected = ticker.uppercased()
+        let up = ticker.uppercased()
+        selected = up
         results = []
+        // Re-selecting a previously removed ticker brings it back to the chips.
+        if store.data.hiddenChartTickers.contains(up) {
+            store.commit { $0.hiddenChartTickers.removeAll { $0 == up } }
+        }
         Task {
-            await store.loadQuote(ticker.uppercased())
+            await store.loadQuote(up)
             await load()
         }
+    }
+
+    private func removeFromCharts(_ ticker: String) {
+        store.commit { if !$0.hiddenChartTickers.contains(ticker) { $0.hiddenChartTickers.append(ticker) } }
+        if selected == ticker { selected = nil }
     }
 
     private func load() async {
