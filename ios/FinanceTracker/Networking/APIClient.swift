@@ -47,10 +47,15 @@ final class APIClient {
             throw APIError.network
         }
         if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
-            if let err = try? decoder.decode(ServerError.self, from: data), let msg = err.error {
-                throw APIError.server(msg)
+            if let err = try? decoder.decode(ServerError.self, from: data), !err.text.isEmpty {
+                throw APIError.server(err.text)
             }
-            throw APIError.server("Request failed (\(http.statusCode))")
+            // Surface the raw body so unexpected statuses are diagnosable.
+            let snippet = String(data: data.prefix(300), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            throw APIError.server(snippet.isEmpty
+                ? "Request failed (\(http.statusCode))"
+                : "HTTP \(http.statusCode): \(snippet)")
         }
         do {
             return try decoder.decode(T.self, from: data)
@@ -59,7 +64,13 @@ final class APIClient {
         }
     }
 
-    private struct ServerError: Decodable { var error: String? }
+    private struct ServerError: Decodable {
+        var error: String?
+        var message: String?
+        var msg: String?
+        var error_description: String?
+        var text: String { error ?? error_description ?? message ?? msg ?? "" }
+    }
 
     // MARK: - Cloud data sync (/api/user-data)
 
