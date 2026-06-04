@@ -32,7 +32,7 @@ final class DataStore: ObservableObject {
 
     private func persist() {
         if let encoded = try? JSONEncoder().encode(data) {
-            UserDefaults.standard.set(encoded, forKey: storageKey)
+            UserDefaults.standard.set(encoded, forKey: DataStore.storageKey)
         }
     }
 
