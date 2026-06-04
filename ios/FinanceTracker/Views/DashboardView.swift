@@ -68,6 +68,7 @@ struct DashboardView: View {
                 if !store.accountFilters.isEmpty { accountPicker }
                 LiveClock()
                 statGrid
+                realizedCard
                 holdingsTable
             }
             .padding(16)
@@ -115,6 +116,26 @@ struct DashboardView: View {
                      positive: netProfit.total >= 0,
                      loading: store.quotesLoading)
         }
+    }
+
+    private var realizedCard: some View {
+        let realized = netProfit.realized
+        let imported = store.data.realizedGainsFromImport
+        let fromSells = realized - imported
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("REALIZED GAINS")
+                .font(.caption2.weight(.semibold)).foregroundStyle(Theme.mutedText)
+            Text(Format.currency(realized))
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Theme.gainColor(realized))
+            HStack(spacing: 12) {
+                Text("From sells: \(Format.currency(fromSells))")
+                if imported != 0 { Text("Imported: \(Format.currency(imported))") }
+            }
+            .font(.caption2).foregroundStyle(Theme.mutedText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
     }
 
     private var holdingsTable: some View {

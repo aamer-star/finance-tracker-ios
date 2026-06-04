@@ -25,9 +25,9 @@ struct RootView: View {
             .tabItem { Label("Charts", systemImage: "chart.xyaxis.line") }
 
             NavigationStack {
-                ChatView()
+                NewsView()
             }
-            .tabItem { Label("AI Chat", systemImage: "sparkles") }
+            .tabItem { Label("News", systemImage: "newspaper.fill") }
 
             NavigationStack {
                 MoreView(showUpload: $showUpload)
@@ -39,9 +39,7 @@ struct RootView: View {
         }
         .task {
             NotificationManager.shared.configure()
-            if !store.data.alerts.isEmpty {
-                await NotificationManager.shared.requestAuthorization()
-            }
+            await NotificationManager.shared.requestAuthorization()
             await store.bootstrapCloud()
             await store.loadQuotes()
             store.startQuotePolling()
@@ -59,21 +57,21 @@ struct MoreView: View {
     var body: some View {
         List {
             Section("Manage") {
-                NavigationLink { TransactionsView() } label: { Label("Transactions", systemImage: "list.bullet.rectangle") }
                 Button { showUpload = true } label: { Label("Import Excel / CSV", systemImage: "square.and.arrow.down") }
+                NavigationLink { TransactionsView() } label: { Label("Transactions", systemImage: "list.bullet.rectangle") }
                 NavigationLink { WatchlistView() } label: { Label("Watchlist", systemImage: "star.fill") }
                 NavigationLink { AlertsView() } label: { Label("Price Alerts", systemImage: "bell.fill") }
             }
             Section("Insights") {
+                NavigationLink { ChatView() } label: { Label("AI Assistant", systemImage: "sparkles") }
                 NavigationLink { AnalyticsView() } label: { Label("Analytics", systemImage: "chart.bar.fill") }
                 NavigationLink { TaxSummaryView() } label: { Label("Tax Summary", systemImage: "doc.text.fill") }
                 NavigationLink { SuggestionsView() } label: { Label("AI Suggestions", systemImage: "wand.and.stars") }
-                NavigationLink { GoalsView() } label: { Label("Goals", systemImage: "target") }
+                NavigationLink { GoalsView() } label: { Label("Financial Goals", systemImage: "target") }
             }
             Section("Markets") {
                 NavigationLink { SimulatorView() } label: { Label("Stock Simulator", systemImage: "gamecontroller.fill") }
-                NavigationLink { CalendarView() } label: { Label("Earnings Calendar", systemImage: "calendar") }
-                NavigationLink { NewsView() } label: { Label("News", systemImage: "newspaper.fill") }
+                NavigationLink { CalendarView() } label: { Label("Calendar", systemImage: "calendar") }
             }
             Section("Account") {
                 if let user = auth.user {

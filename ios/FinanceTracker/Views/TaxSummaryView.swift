@@ -7,6 +7,8 @@ struct TaxSummaryView: View {
     private var realized: [RealizedGain] { store.realizedGains }
     private var shortTerm: Double { realized.filter { !$0.isLongTerm }.reduce(0) { $0 + $1.gain } }
     private var longTerm: Double { realized.filter { $0.isLongTerm }.reduce(0) { $0 + $1.gain } }
+    private var imported: Double { store.data.realizedGainsFromImport }
+    private var totalRealized: Double { shortTerm + longTerm + imported }
 
     private var unrealized: Double {
         PortfolioMath.computeTotalNetProfit(
@@ -20,7 +22,7 @@ struct TaxSummaryView: View {
             Theme.background.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 16) {
-                    Text("Calculated automatically from your buy/sell transactions (FIFO lot matching). Import or add transactions to populate it — there's nothing to enter here.")
+                    Text("Realized totals combine sells the app matched via FIFO with any realized gains imported from your spreadsheet. Unrealized is computed live from current prices.")
                         .font(.caption).foregroundStyle(Theme.mutedText)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -29,8 +31,12 @@ struct TaxSummaryView: View {
                                  sub: "Taxed as income", positive: shortTerm >= 0)
                         StatCard(label: "Long-Term Realized", value: Format.currency(longTerm),
                                  sub: "Held ≥ 1 year", positive: longTerm >= 0)
-                        StatCard(label: "Total Realized", value: Format.currency(shortTerm + longTerm),
-                                 positive: (shortTerm + longTerm) >= 0)
+                        if imported != 0 {
+                            StatCard(label: "Imported (from sheet)", value: Format.currency(imported),
+                                     sub: "Reported in your upload", positive: imported >= 0)
+                        }
+                        StatCard(label: "Total Realized", value: Format.currency(totalRealized),
+                                 sub: "ST + LT + imported", positive: totalRealized >= 0)
                         StatCard(label: "Unrealized", value: Format.currency(unrealized),
                                  sub: "Not yet taxed", positive: unrealized >= 0)
                     }

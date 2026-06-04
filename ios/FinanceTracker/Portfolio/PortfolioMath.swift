@@ -130,9 +130,9 @@ enum PortfolioMath {
             let price = quotes[h.ticker] ?? snapshotPrices[h.ticker] ?? h.avgCostBasis
             return sum + h.shares * (price - h.avgCostBasis)
         }
-        let realized = importedRealizedGains > 0
-            ? importedRealizedGains
-            : realizedGains.reduce(0.0) { $0 + $1.gain }
+        // Realized = gains the app computed from in-app sells (FIFO) PLUS realized gains
+        // the user already reported via an imported sheet.
+        let realized = realizedGains.reduce(0.0) { $0 + $1.gain } + importedRealizedGains
         return NetProfit(unrealized: unrealized, realized: realized, total: unrealized + realized)
     }
 
