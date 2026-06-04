@@ -124,9 +124,9 @@ struct ChatView: View {
                 let reply = try await APIClient.shared.chat(messages: history, portfolioContext: context)
                 messages.append(ChatMessage(role: .assistant, content: reply))
             } catch let APIError.server(msg) {
-                error = msg
+                self.error = msg
             } catch {
-                error = "Could not reach the assistant. Check your connection and backend URL."
+                self.error = "Could not reach the assistant. Check your connection and backend URL."
             }
             sending = false
         }

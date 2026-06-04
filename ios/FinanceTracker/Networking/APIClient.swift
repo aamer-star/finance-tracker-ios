@@ -136,7 +136,9 @@ final class APIClient {
 
     func fetchSuggestions(holdings: [SuggestionHolding], totalValue: Double) async -> (suggestions: [AISuggestion], error: String?) {
         let body: [String: Any] = [
-            "holdings": holdings.map { ["ticker": $0.ticker, "pct": $0.pct, "sector": $0.sector] },
+            "holdings": holdings.map { h -> [String: Any] in
+                ["ticker": h.ticker, "pct": h.pct, "sector": h.sector]
+            },
             "totalValue": totalValue
         ]
         struct Resp: Decodable { var suggestions: [AISuggestion]?; var error: String? }
