@@ -141,19 +141,23 @@ final class APIClient {
     }
 
     private func fetchYahooChart(_ ticker: String, yahooRange: String, interval: String) async -> [PricePoint] {
-        let yahoo = "https://query1.finance.yahoo.com/v8/finance/chart/\(ticker.uppercased())?range=\(yahooRange)&interval=\(interval)"
-        guard let proxied = yahoo.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
-              let url = URL(string: Config.corsProxy + proxied) else { return [] }
+        // Native apps have no CORS restriction, so hit Yahoo's v8 chart endpoint
+        // directly (no crumb required) instead of routing through a flaky proxy.
+        let enc = ticker.uppercased().addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ticker.uppercased()
+        guard let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(enc)?range=\(yahooRange)&interval=\(interval)") else { return [] }
+        var request = URLRequest(url: url, timeoutInterval: 12)
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+                         forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         do {
-            let request = URLRequest(url: url, timeoutInterval: 10)
             let (data, _) = try await session.data(for: request)
             let parsed = try JSONDecoder().decode(YahooChartResponse.self, from: data)
-            guard let result = parsed.chart?.result?.first, let ts = result.timestamp else { return [] }
+            guard let result = parsed.chart?.result?.first, let timestamps = result.timestamp else { return [] }
             let closes = result.indicators?.adjclose?.first?.adjclose
                 ?? result.indicators?.quote?.first?.close ?? []
             var points: [PricePoint] = []
-            for (i, t) in ts.enumerated() where i < closes.count {
-                if let c = closes[i] { points.append(PricePoint(t: Double(t), c: c)) }
+            for (i, ts) in timestamps.enumerated() where i < closes.count {
+                if let c = closes[i] { points.append(PricePoint(t: Double(ts), c: c)) }
             }
             return points
         } catch {
