@@ -5,7 +5,6 @@ struct SettingsView: View {
     @EnvironmentObject var store: DataStore
     @EnvironmentObject var auth: AuthManager
 
-    @AppStorage("api_base_url") private var apiBaseURL = ""
     @State private var finnhubKey = ""
     @State private var showResetConfirm = false
 
@@ -20,16 +19,6 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.mutedText)
                 }
             } header: { Text("Account") }
-
-            Section {
-                TextField(Config.defaultAPIBaseURL, text: $apiBaseURL)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .keyboardType(.URL)
-            } header: {
-                Text("Backend URL")
-            } footer: {
-                Text("Your Vercel deployment hosting /api/*. Leave blank to use the default (\(Config.defaultAPIBaseURL)).")
-            }
 
             Section {
                 SecureField("Finnhub API key (optional)", text: $finnhubKey)
