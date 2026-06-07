@@ -42,57 +42,42 @@ struct PriceTarget: Decodable, Hashable {
     var targetMean: Double; var targetMedian: Double
 }
 
-/// Finnhub-backed news & analyst research (requires the user's optional API key).
+/// News & analyst research, served through the app's own backend `/api/news`
+/// (which holds the Finnhub key server-side) — clients never need a key.
 enum NewsAPI {
     private static let session = URLSession.shared
 
-    static func marketNews(apiKey: String, category: String) async -> [NewsItem] {
-        guard !apiKey.isEmpty,
-              let url = URL(string: "https://finnhub.io/api/v1/news?category=\(category)&token=\(apiKey)")
-        else { return [] }
-        return await fetchNews(url, limit: 30)
+    static func marketNews(category: String) async -> [NewsItem] {
+        await newsList("type=market&category=\(category)")
     }
 
-    static func tickerNews(ticker: String, apiKey: String) async -> [NewsItem] {
-        guard !apiKey.isEmpty, !ticker.isEmpty else { return [] }
-        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"; df.locale = Locale(identifier: "en_US_POSIX")
-        let to = df.string(from: Date())
-        let from = df.string(from: Date().addingTimeInterval(-30 * 86400))
+    static func tickerNews(ticker: String) async -> [NewsItem] {
+        guard let t = ticker.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return [] }
+        return await newsList("type=company&symbol=\(t)")
+    }
+
+    static func analystData(ticker: String) async -> (rec: AnalystRecommendation?, pt: PriceTarget?) {
         guard let t = ticker.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://finnhub.io/api/v1/company-news?symbol=\(t)&from=\(from)&to=\(to)&token=\(apiKey)")
-        else { return [] }
-        return await fetchNews(url, limit: 20)
-    }
-
-    static func analystData(ticker: String, apiKey: String) async -> (rec: AnalystRecommendation?, pt: PriceTarget?) {
-        guard !apiKey.isEmpty, !ticker.isEmpty,
-              let t = ticker.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return (nil, nil) }
-        async let recData: [AnalystRecommendation] = fetchJSON(
-            "https://finnhub.io/api/v1/stock/recommendation?symbol=\(t)&token=\(apiKey)") ?? []
-        async let ptData: PriceTarget? = fetchJSON(
-            "https://finnhub.io/api/v1/stock/price-target?symbol=\(t)&token=\(apiKey)")
-        let rec = await recData.first
-        let pt = await ptData
-        return (rec, (pt?.targetMean ?? 0) > 0 ? pt : nil)
-    }
-
-    private static func fetchNews(_ url: URL, limit: Int) async -> [NewsItem] {
+              let url = Config.apiURL("/api/news?type=analyst&symbol=\(t)") else { return (nil, nil) }
+        struct Resp: Decodable { var rec: AnalystRecommendation?; var pt: PriceTarget? }
         do {
             let (data, _) = try await session.data(from: url)
-            let items = try JSONDecoder().decode([NewsItem].self, from: data)
-            return Array(items.filter { !$0.headline.isEmpty }.prefix(limit))
+            let r = try JSONDecoder().decode(Resp.self, from: data)
+            return (r.rec, r.pt)
         } catch {
-            return []
+            return (nil, nil)
         }
     }
 
-    private static func fetchJSON<T: Decodable>(_ urlString: String) async -> T? {
-        guard let url = URL(string: urlString) else { return nil }
+    private static func newsList(_ query: String) async -> [NewsItem] {
+        guard let url = Config.apiURL("/api/news?\(query)") else { return [] }
+        struct Resp: Decodable { var news: [NewsItem]? }
         do {
             let (data, _) = try await session.data(from: url)
-            return try JSONDecoder().decode(T.self, from: data)
+            let r = try JSONDecoder().decode(Resp.self, from: data)
+            return (r.news ?? []).filter { !$0.headline.isEmpty }
         } catch {
-            return nil
+            return []
         }
     }
 }

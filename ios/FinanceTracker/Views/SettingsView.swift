@@ -5,7 +5,6 @@ struct SettingsView: View {
     @EnvironmentObject var store: DataStore
     @EnvironmentObject var auth: AuthManager
 
-    @State private var finnhubKey = ""
     @State private var showResetConfirm = false
 
     var body: some View {
@@ -21,18 +20,6 @@ struct SettingsView: View {
             } header: { Text("Account") }
 
             Section {
-                SecureField("Finnhub API key (optional)", text: $finnhubKey)
-                Button("Save Key") {
-                    store.commit { $0.apiKey = finnhubKey }
-                }
-                .disabled(finnhubKey.isEmpty)
-            } header: {
-                Text("Market Data")
-            } footer: {
-                Text("Used as a fallback for quotes and to power News & the earnings calendar fallback.")
-            }
-
-            Section {
                 LabeledContent("Transactions", value: "\(store.data.transactions.count)")
                 LabeledContent("Watchlist", value: "\(store.data.watchlist.count)")
                 LabeledContent("Accounts", value: "\(store.activeAccounts.count)")
@@ -46,7 +33,6 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.background)
         .navigationTitle("Settings")
-        .onAppear { finnhubKey = store.data.apiKey }
         .alert("Reset all local data?", isPresented: $showResetConfirm) {
             Button("Reset", role: .destructive) {
                 store.resetLocalOnly()

@@ -18,27 +18,17 @@ struct NewsView: View {
     struct AnalystCard: Identifiable { var id: String { ticker }; var ticker: String; var rec: AnalystRecommendation?; var pt: PriceTarget?; var price: Double? }
 
     private let categories = ["general", "forex", "crypto", "merger"]
-    private var hasKey: Bool { !store.data.apiKey.isEmpty }
     private var tickers: [String] { store.holdings.map(\.ticker) }
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            if !hasKey {
-                ContentUnavailableView {
-                    Label("News & Research needs a Finnhub key", systemImage: "newspaper")
-                } description: {
-                    Text("Add a free Finnhub API key in More → Settings to enable news and analyst research.")
-                }
-            } else {
-                content
-            }
+            content
         }
         .navigationTitle("News & Research")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await reload() } } label: { Image(systemName: "arrow.clockwise") }
-                    .disabled(!hasKey)
             }
         }
         .task(id: tab) { await reload() }
@@ -251,22 +241,21 @@ struct NewsView: View {
         let up = t.trimmingCharacters(in: .whitespaces).uppercased()
         guard !up.isEmpty else { return }
         selectedTicker = up
-        Task { tickerNews = await NewsAPI.tickerNews(ticker: up, apiKey: store.data.apiKey) }
+        Task { tickerNews = await NewsAPI.tickerNews(ticker: up) }
     }
 
     private func reload() async {
-        guard hasKey else { return }
         loading = true
         switch tab {
         case .market:
-            marketNews = await NewsAPI.marketNews(apiKey: store.data.apiKey, category: category)
+            marketNews = await NewsAPI.marketNews(category: category)
         case .holdings:
             await store.loadQuotes()
             holdingsNews = await loadHoldingsNews()
             analyst = await loadAnalyst()
         case .ticker:
             if !selectedTicker.isEmpty {
-                tickerNews = await NewsAPI.tickerNews(ticker: selectedTicker, apiKey: store.data.apiKey)
+                tickerNews = await NewsAPI.tickerNews(ticker: selectedTicker)
             }
         }
         loading = false
@@ -275,7 +264,7 @@ struct NewsView: View {
     private func loadHoldingsNews() async -> [NewsItem] {
         var all: [NewsItem] = []
         for t in tickers.prefix(8) {
-            all += await NewsAPI.tickerNews(ticker: t, apiKey: store.data.apiKey)
+            all += await NewsAPI.tickerNews(ticker: t)
         }
         return Array(all.sorted { $0.datetime > $1.datetime }.prefix(40))
     }
@@ -283,7 +272,7 @@ struct NewsView: View {
     private func loadAnalyst() async -> [AnalystCard] {
         var cards: [AnalystCard] = []
         for t in tickers.prefix(10) {
-            let (rec, pt) = await NewsAPI.analystData(ticker: t, apiKey: store.data.apiKey)
+            let (rec, pt) = await NewsAPI.analystData(ticker: t)
             cards.append(AnalystCard(ticker: t, rec: rec, pt: pt, price: store.quotes[t]?.price))
         }
         return cards
