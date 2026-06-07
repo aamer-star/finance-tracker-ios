@@ -11,7 +11,9 @@ import Foundation
 /// It can be overridden at runtime in Settings (stored in UserDefaults under `api_base_url`).
 enum Config {
     /// Default Vercel deployment that hosts /api/auth, /api/user-data, /api/history, etc.
-    static let defaultAPIBaseURL = "https://finance-tracker.vercel.app"
+    /// This is the public production alias — keep it pointed at a deployment whose
+    /// Vercel "Deployment Protection" is OFF, or every install will be blocked with a 401.
+    static let defaultAPIBaseURL = "https://desktop-tutorial-alpha-neon.vercel.app"
 
     /// CORS proxy used by the web app to reach Yahoo Finance quote endpoints directly.
     /// Native apps aren't subject to CORS, but Yahoo's v7 quote endpoint still rejects
