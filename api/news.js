@@ -50,3 +50,5 @@ module.exports = async (req, res) => {
     return res.status(200).json({ error: String(e), news: [], rec: null, pt: null });
   }
 };
+
+// Deploy trigger: 2026-06-08T13:41:06Z
