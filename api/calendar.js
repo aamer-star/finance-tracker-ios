@@ -3,7 +3,9 @@ module.exports = async (req, res) => {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { tickers, apiKey } = req.body ?? {};
+  const { tickers } = req.body ?? {};
+  // Use the server-side Finnhub key (falls back to a client-provided one if present).
+  const apiKey = process.env.FINNHUB_API_KEY || (req.body && req.body.apiKey);
   if (!tickers?.length) return res.status(200).json({ events: [] });
 
   const tickerSet = new Set(tickers.map(t => t.toUpperCase()));
