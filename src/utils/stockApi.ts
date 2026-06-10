@@ -239,15 +239,15 @@ export interface NewsItem {
 const newsCache: Record<string, { data: NewsItem[]; ts: number }> = {};
 const NEWS_TTL = 10 * 60 * 1000;
 
-export async function fetchMarketNews(apiKey: string, category = 'general'): Promise<NewsItem[]> {
+export async function fetchMarketNews(_apiKey: string, category = 'general'): Promise<NewsItem[]> {
   const key = `market-${category}`;
   const cached = newsCache[key];
   if (cached && Date.now() - cached.ts < NEWS_TTL) return cached.data;
   try {
-    const res = await fetch(`https://finnhub.io/api/v1/news?category=${category}&token=${apiKey}`);
+    const res = await fetch(`/api/news?type=market&category=${encodeURIComponent(category)}`);
     if (!res.ok) return [];
-    const data: NewsItem[] = await res.json();
-    const items = data.slice(0, 30);
+    const json = await res.json();
+    const items: NewsItem[] = (json.news ?? []).slice(0, 30);
     newsCache[key] = { data: items, ts: Date.now() };
     return items;
   } catch {
@@ -255,19 +255,15 @@ export async function fetchMarketNews(apiKey: string, category = 'general'): Pro
   }
 }
 
-export async function fetchTickerNews(ticker: string, apiKey: string): Promise<NewsItem[]> {
+export async function fetchTickerNews(ticker: string, _apiKey: string): Promise<NewsItem[]> {
   const key = `ticker-${ticker}`;
   const cached = newsCache[key];
   if (cached && Date.now() - cached.ts < NEWS_TTL) return cached.data;
-  const to = new Date().toISOString().slice(0, 10);
-  const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   try {
-    const res = await fetch(
-      `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(ticker)}&from=${from}&to=${to}&token=${apiKey}`
-    );
+    const res = await fetch(`/api/news?type=company&symbol=${encodeURIComponent(ticker)}`);
     if (!res.ok) return [];
-    const data: NewsItem[] = await res.json();
-    const items = data.slice(0, 20);
+    const json = await res.json();
+    const items: NewsItem[] = (json.news ?? []).slice(0, 20);
     newsCache[key] = { data: items, ts: Date.now() };
     return items;
   } catch {
@@ -293,19 +289,15 @@ const analystCache: Record<string, { rec: AnalystRecommendation | null; pt: Pric
 const ANALYST_TTL = 60 * 60 * 1000;
 
 export async function fetchAnalystData(
-  ticker: string, apiKey: string
+  ticker: string, _apiKey: string
 ): Promise<{ rec: AnalystRecommendation | null; pt: PriceTarget | null }> {
   const cached = analystCache[ticker];
   if (cached && Date.now() - cached.ts < ANALYST_TTL) return { rec: cached.rec, pt: cached.pt };
   try {
-    const [recRes, ptRes] = await Promise.all([
-      fetch(`https://finnhub.io/api/v1/stock/recommendation?symbol=${encodeURIComponent(ticker)}&token=${apiKey}`),
-      fetch(`https://finnhub.io/api/v1/stock/price-target?symbol=${encodeURIComponent(ticker)}&token=${apiKey}`),
-    ]);
-    const recData = recRes.ok ? await recRes.json() : [];
-    const ptData = ptRes.ok ? await ptRes.json() : null;
-    const rec: AnalystRecommendation | null = recData.length ? { ...recData[0], symbol: ticker } : null;
-    const pt: PriceTarget | null = ptData?.targetMean ? { ...ptData, symbol: ticker } : null;
+    const res = await fetch(`/api/news?type=analyst&symbol=${encodeURIComponent(ticker)}`);
+    const json = res.ok ? await res.json() : {};
+    const rec: AnalystRecommendation | null = json.rec ? { ...json.rec, symbol: ticker } : null;
+    const pt: PriceTarget | null = json.pt?.targetMean ? { ...json.pt, symbol: ticker } : null;
     analystCache[ticker] = { rec, pt, ts: Date.now() };
     return { rec, pt };
   } catch {

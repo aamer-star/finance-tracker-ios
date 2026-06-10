@@ -166,7 +166,7 @@ export default function News({ data, quotes }: Props) {
   const holdings = useMemo(() => computeHoldings(data.transactions), [data.transactions]);
   const tickers = useMemo(() => holdings.map((h) => h.ticker), [holdings]);
 
-  const hasKey = !!data.apiKey;
+  const hasKey = true; // News is served via the backend /api/news (server-side key) — no per-user key needed
 
   const loadMarketNews = async (cat: string) => {
     if (!hasKey) return;
@@ -219,16 +219,6 @@ export default function News({ data, quotes }: Props) {
     }
     if (tab === 'ticker' && selectedTicker) loadTickerNews(selectedTicker);
   }, [tab, category, selectedTicker, hasKey]);
-
-  if (!hasKey) {
-    return (
-      <div className="p-8 text-center">
-        <p className="text-gray-400 text-sm">
-          Add your Finnhub API key in <strong>Settings</strong> to enable news and research.
-        </p>
-      </div>
-    );
-  }
 
   const categories = [
     { id: 'general', label: 'General', icon: Globe },
