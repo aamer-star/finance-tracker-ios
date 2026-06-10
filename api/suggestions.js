@@ -1,9 +1,9 @@
-// AI stock suggestions via Google Gemini (free tier). Set GEMINI_API_KEY in Vercel env vars.
+// AI stock suggestions via Groq (free tier, OpenAI-compatible). Set GROQ_API_KEY in Vercel env vars.
 module.exports = async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return res.status(200).json({ suggestions: [], error: 'no_key' });
 
   const { holdings = [], totalValue = 0 } = req.body ?? {};
@@ -26,21 +26,23 @@ Return ONLY a JSON array with exactly 5 objects, no other text:
 riskLevel must be one of: low, moderate, high
 Focus on diversification gaps and sectors underrepresented in the portfolio.`;
 
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.8, responseMimeType: 'application/json' },
-        }),
-      }
-    );
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'You are a portfolio analyst that responds only with a JSON array, no prose.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1024,
+        temperature: 0.8,
+      }),
+    });
     const data = await r.json();
     if (!r.ok) return res.status(200).json({ suggestions: [], error: data.error?.message || 'AI request failed' });
 
-    const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text).join('') || '';
+    const text = data.choices?.[0]?.message?.content ?? '';
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return res.status(200).json({ suggestions: [], error: 'Could not parse AI response. Try again.' });
 
