@@ -7,15 +7,33 @@ struct ChartsView: View {
     @State private var query = ""
     @State private var results: [StockSearchResult] = []
     @State private var selected: String?
-    @State private var range = "1mo"
-    @State private var lastFreeRange = "1mo"
+    @State private var range = "1d"
+    @State private var lastFreeRange = "1d"
     @State private var points: [PricePoint] = []
     @State private var loading = false
     @State private var searchTask: Task<Void, Never>?
     @State private var showPaywall = false
 
+    /// Drives live auto-refresh of the selected chart.
+    private let liveTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
     private var holding: Holding? { store.holdings.first { $0.ticker == selected } }
     private var quote: StockQuote? { selected.flatMap { store.quotes[$0] } }
+
+    /// Performance over the *currently selected* time range (first → last close),
+    /// so the figure changes as you switch periods instead of always showing today's move.
+    private var periodChange: (abs: Double, pct: Double)? {
+        guard let first = points.first?.c, let last = points.last?.c, first > 0 else { return nil }
+        return (last - first, (last - first) / first * 100)
+    }
+
+    private var rangeLabel: String {
+        switch range {
+        case "1d": return "1D"; case "1w": return "1W"; case "1mo": return "1M"
+        case "3mo": return "3M"; case "6mo": return "6M"; case "1y": return "1Y"
+        case "5y": return "5Y"; default: return range.uppercased()
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -47,6 +65,14 @@ struct ChartsView: View {
             }
             lastFreeRange = newRange
             if selected != nil { Task { await load() } }
+        }
+        .onReceive(liveTimer) { _ in
+            // Live update: silently refresh the quote + chart for the open ticker.
+            guard let t = selected else { return }
+            Task {
+                await store.loadQuote(t)
+                await load(silent: true)
+            }
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(reason: "Full chart history (3M, 6M, 1Y, 5Y) is a Pro feature.")
@@ -125,14 +151,19 @@ struct ChartsView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(ticker).font(.title3.weight(.bold))
-                    if let q = quote {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(Format.currency(q.price)).font(.title2.weight(.semibold))
-                            Label("\(Format.currency(q.change)) (\(Format.percent(q.changePercent)))",
-                                  systemImage: q.change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                    HStack(spacing: 6) {
+                        Text(ticker).font(.title3.weight(.bold))
+                        Circle().fill(Theme.positive).frame(width: 6, height: 6)
+                        Text("LIVE").font(.caption2.weight(.bold)).foregroundStyle(Theme.positive)
+                    }
+                    let displayPrice = quote?.price ?? points.last?.c ?? 0
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(Format.currency(displayPrice)).font(.title2.weight(.semibold))
+                        if let pc = periodChange {
+                            Label("\(rangeLabel) \(Format.currency(pc.abs)) (\(Format.percent(pc.pct)))",
+                                  systemImage: pc.abs >= 0 ? "arrow.up.right" : "arrow.down.right")
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(Theme.gainColor(q.change))
+                                .foregroundStyle(Theme.gainColor(pc.abs))
                         }
                     }
                 }
@@ -198,10 +229,18 @@ struct ChartsView: View {
         if selected == ticker { selected = nil }
     }
 
-    private func load() async {
-        guard let selected else { return }
-        loading = true
-        points = await APIClient.shared.fetchHistory(ticker: selected, range: range)
-        loading = false
+    private func load(silent: Bool = false) async {
+        guard let ticker = selected else { return }
+        let requestedRange = range
+        if !silent { loading = true }
+        let fetched = await APIClient.shared.fetchHistory(ticker: ticker, range: requestedRange)
+        // Ignore stale responses: only apply if the user hasn't switched ticker/range,
+        // and never wipe a good chart with an empty live-refresh result.
+        guard selected == ticker, range == requestedRange else {
+            if !silent { loading = false }
+            return
+        }
+        if !silent || !fetched.isEmpty { points = fetched }
+        if !silent { loading = false }
     }
 }
