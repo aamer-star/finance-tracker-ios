@@ -30,6 +30,16 @@ Status of the work to make Finance Tracker a polished, monetizable public app.
 - [x] First-run onboarding (4 slides)
 - [x] Face ID / Touch ID app lock (Settings toggle)
 
+### Phase 4 — Differentiators & polish
+- [x] Password reset (email link) on top of Supabase auth
+- [x] Persistent AI chat history (+ clear)
+- [x] Portfolio Health Score (0–100 + grade + factor breakdown + tips)
+- [x] Projected dividend income (forward annual income, yield on cost, portfolio yield)
+- [x] Shareable branded portfolio card (render-to-image + share sheet)
+- [x] Live portfolio value-over-time chart (recorded daily, local)
+- [x] Edit individual transactions (tap to edit)
+- [x] Auth polish: show/hide password + strength meter
+
 ## 🔜 To do in App Store Connect (no code — needs your Apple account)
 1. Finish Apple Developer Program enrollment (pending).
 2. Create the subscription group + two products with the exact Product IDs in

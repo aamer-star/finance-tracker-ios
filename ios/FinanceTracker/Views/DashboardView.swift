@@ -1,10 +1,12 @@
 import SwiftUI
 import Combine
+import UIKit
 
 /// Port of src/pages/Dashboard.tsx — live clock, four stat tiles, holdings table.
 struct DashboardView: View {
     @EnvironmentObject var store: DataStore
     @Binding var showUpload: Bool
+    @State private var shareImage: Image?
 
     var body: some View {
         ZStack {
@@ -27,10 +29,44 @@ struct DashboardView: View {
                 }
                 .disabled(store.quotesLoading)
             }
+            if let shareImage, !holdings.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: shareImage,
+                              preview: SharePreview("My Finance Tracker portfolio", image: shareImage)) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarLeading) {
                 Button { showUpload = true } label: { Image(systemName: "square.and.arrow.down") }
             }
         }
+        .task { renderShareCard() }
+        .onChange(of: totalMarketValue) { _, _ in renderShareCard() }
+    }
+
+    // MARK: - Shareable summary card
+
+    @MainActor private func renderShareCard() {
+        guard !holdings.isEmpty else { shareImage = nil; return }
+        let rows = holdings
+            .sorted { $0.shares * store.price(for: $0) > $1.shares * store.price(for: $1) }
+            .prefix(4)
+            .map { h -> PortfolioShareCard.Row in
+                let mv = h.shares * store.price(for: h)
+                let ret = h.totalCost > 0 ? (mv - h.totalCost) / h.totalCost * 100 : 0
+                return .init(ticker: h.ticker, value: mv, returnPct: ret)
+            }
+        let card = PortfolioShareCard(
+            totalValue: totalMarketValue,
+            dayChange: dayChange,
+            dayChangePct: totalMarketValue > 0 ? dayChange / totalMarketValue * 100 : 0,
+            totalReturn: overallReturn,
+            rows: Array(rows)
+        )
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 3
+        if let ui = renderer.uiImage { shareImage = Image(uiImage: ui) }
     }
 
     // MARK: - Derived figures
@@ -192,6 +228,65 @@ struct DashboardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
+    }
+}
+
+/// Branded, screenshot-ready portfolio summary rendered to an image for sharing.
+struct PortfolioShareCard: View {
+    struct Row: Identifiable { let id = UUID(); var ticker: String; var value: Double; var returnPct: Double }
+
+    var totalValue: Double
+    var dayChange: Double
+    var dayChangePct: Double
+    var totalReturn: Double
+    var rows: [Row]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.accent)
+                Text("Finance Tracker").font(.headline).foregroundStyle(.white)
+                Spacer()
+                Text("MY PORTFOLIO").font(.caption2.weight(.bold)).foregroundStyle(Theme.mutedText)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Total Value").font(.caption).foregroundStyle(Theme.mutedText)
+                Text(Format.currency(totalValue, fraction: 0))
+                    .font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
+                HStack(spacing: 12) {
+                    Label("\(Format.currency(dayChange, fraction: 0)) (\(Format.percent(dayChangePct)))",
+                          systemImage: dayChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                        .foregroundStyle(Theme.gainColor(dayChange))
+                    Text("\(Format.percent(totalReturn)) total")
+                        .foregroundStyle(Theme.gainColor(totalReturn))
+                }
+                .font(.subheadline.weight(.semibold))
+            }
+
+            VStack(spacing: 8) {
+                ForEach(rows) { r in
+                    HStack {
+                        Text(r.ticker).font(.subheadline.weight(.bold)).foregroundStyle(.white)
+                        Spacer()
+                        Text(Format.currency(r.value, fraction: 0)).font(.subheadline).foregroundStyle(.white)
+                        Text(Format.percent(r.returnPct)).font(.caption.weight(.medium))
+                            .foregroundStyle(Theme.gainColor(r.returnPct))
+                            .frame(width: 72, alignment: .trailing)
+                    }
+                }
+            }
+
+            Text("Tracked with Finance Tracker — portfolio, charts & AI insights")
+                .font(.caption2).foregroundStyle(Theme.mutedText)
+        }
+        .padding(22)
+        .frame(width: 360)
+        .background(Theme.surface)
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.surfaceBorder))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .background(Theme.background)
     }
 }
 

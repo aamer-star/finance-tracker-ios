@@ -95,6 +95,7 @@ final class DataStore: ObservableObject {
         AuthManager.shared.signOut()
         UserDefaults.standard.removeObject(forKey: DataStore.storageKey)
         ChatHistory.clear()
+        ValueHistory.clear()
         data = .empty
         quotes = [:]
     }
@@ -106,6 +107,7 @@ final class DataStore: ObservableObject {
         quotes = [:]
         UserDefaults.standard.removeObject(forKey: DataStore.storageKey)
         ChatHistory.clear()
+        ValueHistory.clear()
     }
 
     // MARK: - Quotes
@@ -122,6 +124,18 @@ final class DataStore: ObservableObject {
         for (k, v) in result { quotes[k] = v }
         quotesLoading = false
         checkAlerts()
+        recordValueSnapshot()
+    }
+
+    /// Logs today's total portfolio value (all accounts) for the value-history chart.
+    private func recordValueSnapshot() {
+        let allHoldings = PortfolioMath.computeHoldings(data.transactions)
+        guard !allHoldings.isEmpty else { return }
+        let total = allHoldings.reduce(0.0) { sum, h in
+            let price = priceMap[h.ticker] ?? data.snapshotPrices[h.ticker] ?? h.avgCostBasis
+            return sum + h.shares * price
+        }
+        ValueHistory.record(value: total)
     }
 
     func loadQuote(_ ticker: String) async {
@@ -189,6 +203,20 @@ final class DataStore: ObservableObject {
             }
             for acct in Set(incoming.map(\.account)) where !d.accounts.contains(acct) {
                 d.accounts.append(acct)
+            }
+        }
+        Task { await loadQuotes() }
+    }
+
+    /// Replaces an existing transaction (matched by id) in place.
+    func updateTransaction(_ updated: Transaction) {
+        commit { d in
+            if let idx = d.transactions.firstIndex(where: { $0.id == updated.id }) {
+                d.transactions[idx] = updated
+            }
+            if !d.accounts.contains(updated.account) { d.accounts.append(updated.account) }
+            d.transactions.sort {
+                (PortfolioMath.parseDate($0.date) ?? .distantPast) < (PortfolioMath.parseDate($1.date) ?? .distantPast)
             }
         }
         Task { await loadQuotes() }

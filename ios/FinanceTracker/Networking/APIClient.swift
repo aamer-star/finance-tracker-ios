@@ -270,13 +270,14 @@ final class APIClient {
             ticker: ticker, name: nil, price: last.c, change: change,
             changePercent: pct, previousClose: prev,
             lastUpdated: Date().timeIntervalSince1970 * 1000,
-            earningsDate: nil, epsForward: nil, dividendDate: nil
+            earningsDate: nil, epsForward: nil, dividendDate: nil,
+            annualDividendRate: nil, dividendYield: nil
         )
     }
 
     private func fetchQuotesViaProxy(_ tickers: [String]) async -> [String: StockQuote] {
         let symbols = tickers.joined(separator: ",")
-        let fields = "regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,earningsTimestamp,earningsTimestampStart,epsForward,dividendDate"
+        let fields = "regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,earningsTimestamp,earningsTimestampStart,epsForward,dividendDate,trailingAnnualDividendRate,trailingAnnualDividendYield"
         guard let symEnc = symbols.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else { return [:] }
         let yahoo = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=\(symEnc)&fields=\(fields)"
         guard let proxied = yahoo.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
@@ -300,7 +301,9 @@ final class APIClient {
                     lastUpdated: Date().timeIntervalSince1970 * 1000,
                     earningsDate: item.earningsTimestamp ?? item.earningsTimestampStart,
                     epsForward: item.epsForward,
-                    dividendDate: item.dividendDate
+                    dividendDate: item.dividendDate,
+                    annualDividendRate: item.trailingAnnualDividendRate,
+                    dividendYield: item.trailingAnnualDividendYield.map { $0 * 100 }
                 )
             }
             return out
@@ -325,5 +328,7 @@ final class APIClient {
         var earningsTimestampStart: Double?
         var epsForward: Double?
         var dividendDate: Double?
+        var trailingAnnualDividendRate: Double?
+        var trailingAnnualDividendYield: Double?
     }
 }

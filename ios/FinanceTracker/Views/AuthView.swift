@@ -15,6 +15,7 @@ struct AuthView: View {
     @State private var showReset = false
     @State private var resetEmail = ""
     @State private var resetNotice: String?
+    @State private var showPassword = false
 
     enum Mode { case signin, signup }
 
@@ -34,7 +35,7 @@ struct AuthView: View {
                             .pickerStyle(.segmented)
 
                             field(title: "Email", text: $email, isSecure: false, keyboard: .emailAddress)
-                            field(title: "Password", text: $password, isSecure: true, keyboard: .default)
+                            passwordField
 
                             if let error {
                                 Text(error)
@@ -139,6 +140,62 @@ struct AuthView: View {
             .background(Theme.background)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.surfaceBorder))
+        }
+    }
+
+    // MARK: - Password field with reveal + strength
+
+    private var passwordField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Password").font(.caption).foregroundStyle(Theme.mutedText)
+            HStack {
+                Group {
+                    if showPassword {
+                        TextField("Password", text: $password)
+                    } else {
+                        SecureField("Password", text: $password)
+                    }
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                Button { showPassword.toggle() } label: {
+                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                        .foregroundStyle(Theme.mutedText)
+                }
+            }
+            .padding(12)
+            .background(Theme.background)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.surfaceBorder))
+
+            if mode == .signup && !password.isEmpty {
+                let s = passwordStrength
+                VStack(alignment: .leading, spacing: 4) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Theme.surfaceBorder)
+                            Capsule().fill(s.color).frame(width: geo.size.width * s.fraction)
+                        }
+                    }
+                    .frame(height: 5)
+                    Text(s.label).font(.caption2).foregroundStyle(s.color)
+                }
+            }
+        }
+    }
+
+    private var passwordStrength: (label: String, fraction: CGFloat, color: Color) {
+        var score = 0
+        if password.count >= 8 { score += 1 }
+        if password.count >= 12 { score += 1 }
+        if password.rangeOfCharacter(from: .uppercaseLetters) != nil &&
+           password.rangeOfCharacter(from: .lowercaseLetters) != nil { score += 1 }
+        if password.rangeOfCharacter(from: .decimalDigits) != nil { score += 1 }
+        if password.rangeOfCharacter(from: CharacterSet(charactersIn: "!@#$%^&*()_-+=[]{}|;:,.<>?")) != nil { score += 1 }
+        switch score {
+        case 0...1: return ("Weak", 0.33, Theme.negative)
+        case 2...3: return ("Good", 0.66, .yellow)
+        default: return ("Strong", 1.0, Theme.positive)
         }
     }
 

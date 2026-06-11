@@ -41,6 +41,8 @@ struct StockQuote: Codable, Hashable {
     var earningsDate: Double?        // unix seconds
     var epsForward: Double?
     var dividendDate: Double?        // unix seconds
+    var annualDividendRate: Double?  // trailing annual dividend $/share
+    var dividendYield: Double?       // trailing annual yield (%), e.g. 1.4 = 1.4%
 }
 
 struct RealizedGain: Identifiable, Hashable {

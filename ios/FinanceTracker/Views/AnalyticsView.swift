@@ -73,6 +73,7 @@ struct AnalyticsView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         summaryCards
+                        if liveValuePoints.count >= 2 { liveValueCard }
                         costBasisCard
                         allocationCard(title: "Allocation by Stock", slices: allocationByStock)
                         allocationCard(title: "Allocation by Sector", slices: allocationBySector)
@@ -116,6 +117,51 @@ struct AnalyticsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    // MARK: - Live portfolio value over time (recorded as you use the app)
+
+    private struct LivePoint: Identifiable { var id: Date { date }; var date: Date; var value: Double }
+    private var liveValuePoints: [LivePoint] {
+        ValueHistory.load().compactMap { p in
+            PortfolioMath.parseDate(p.date).map { LivePoint(date: $0, value: p.value) }
+        }
+    }
+
+    private var liveValueCard: some View {
+        let pts = liveValuePoints
+        let first = pts.first?.value ?? 0
+        let last = pts.last?.value ?? 0
+        let change = first > 0 ? (last - first) / first * 100 : 0
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("PORTFOLIO VALUE OVER TIME").font(.caption2.weight(.semibold)).foregroundStyle(Theme.mutedText)
+                Spacer()
+                Text("\(Format.percent(change)) since \(pts.count)d ago")
+                    .font(.caption2.weight(.medium)).foregroundStyle(Theme.gainColor(change))
+            }
+            Chart(pts) { p in
+                AreaMark(x: .value("Date", p.date), y: .value("Value", p.value))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(LinearGradient(colors: [Theme.accent.opacity(0.3), Theme.accent.opacity(0)],
+                                                    startPoint: .top, endPoint: .bottom))
+                LineMark(x: .value("Date", p.date), y: .value("Value", p.value))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(Theme.accent)
+            }
+            .frame(height: 180)
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine().foregroundStyle(Theme.surfaceBorder)
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) { Text("$\(Int(v / 1000))k").font(.caption2) }
+                    }
+                }
+            }
+            Text("Recorded live each day you open the app.")
+                .font(.caption2).foregroundStyle(Theme.mutedText)
+        }
         .card()
     }
 

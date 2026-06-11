@@ -4,6 +4,7 @@ import SwiftUI
 struct TransactionsView: View {
     @EnvironmentObject var store: DataStore
     @State private var showAdd = false
+    @State private var editingTxn: Transaction?
 
     private var transactions: [Transaction] {
         let all = store.data.transactions
@@ -22,7 +23,8 @@ struct TransactionsView: View {
             } else {
                 List {
                     ForEach(transactions) { t in
-                        row(t)
+                        Button { editingTxn = t } label: { row(t) }
+                            .buttonStyle(.plain)
                             .listRowBackground(Theme.surface)
                     }
                     .onDelete(perform: delete)
@@ -37,6 +39,7 @@ struct TransactionsView: View {
             }
         }
         .sheet(isPresented: $showAdd) { AddTransactionView() }
+        .sheet(item: $editingTxn) { AddTransactionView(editing: $0) }
     }
 
     private func row(_ t: Transaction) -> some View {
@@ -78,17 +81,29 @@ struct TransactionsView: View {
     }
 }
 
-/// Manual transaction entry.
+/// Manual transaction entry — also used to edit an existing transaction.
 struct AddTransactionView: View {
     @EnvironmentObject var store: DataStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var ticker = ""
-    @State private var action: TransactionAction = .buy
-    @State private var shares = ""
-    @State private var price = ""
-    @State private var date = Date()
-    @State private var account = "Default"
+    private let editing: Transaction?
+
+    @State private var ticker: String
+    @State private var action: TransactionAction
+    @State private var shares: String
+    @State private var price: String
+    @State private var date: Date
+    @State private var account: String
+
+    init(editing: Transaction? = nil) {
+        self.editing = editing
+        _ticker = State(initialValue: editing?.ticker ?? "")
+        _action = State(initialValue: editing?.action ?? .buy)
+        _shares = State(initialValue: editing.map { Format.shares($0.shares) } ?? "")
+        _price = State(initialValue: editing.map { String($0.price) } ?? "")
+        _date = State(initialValue: editing.flatMap { PortfolioMath.parseDate($0.date) } ?? Date())
+        _account = State(initialValue: editing?.account ?? "Default")
+    }
 
     var body: some View {
         NavigationStack {
@@ -107,7 +122,7 @@ struct AddTransactionView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.background)
-            .navigationTitle("Add Transaction")
+            .navigationTitle(editing == nil ? "Add Transaction" : "Edit Transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -128,16 +143,31 @@ struct AddTransactionView: View {
         df.dateFormat = "yyyy-MM-dd"
         df.locale = Locale(identifier: "en_US_POSIX")
         let dateStr = df.string(from: date)
-        let t = Transaction(
-            id: "\(ticker.uppercased())-\(dateStr)-\(action.rawValue)-\(Int(Date().timeIntervalSince1970))",
-            ticker: ticker.uppercased(),
-            action: action,
-            shares: Double(shares) ?? 0,
-            price: Double(price) ?? 0,
-            date: dateStr,
-            account: account.isEmpty ? "Default" : account
-        )
-        store.addTransactions([t])
+        let acct = account.isEmpty ? "Default" : account
+        if let editing {
+            let updated = Transaction(
+                id: editing.id,
+                ticker: ticker.uppercased(),
+                action: action,
+                shares: Double(shares) ?? 0,
+                price: Double(price) ?? 0,
+                date: dateStr,
+                account: acct,
+                notes: editing.notes
+            )
+            store.updateTransaction(updated)
+        } else {
+            let t = Transaction(
+                id: "\(ticker.uppercased())-\(dateStr)-\(action.rawValue)-\(Int(Date().timeIntervalSince1970))",
+                ticker: ticker.uppercased(),
+                action: action,
+                shares: Double(shares) ?? 0,
+                price: Double(price) ?? 0,
+                date: dateStr,
+                account: acct
+            )
+            store.addTransactions([t])
+        }
         dismiss()
     }
 }
