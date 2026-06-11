@@ -13,7 +13,7 @@ struct PaywallView: View {
     private let features: [(String, String)] = [
         ("sparkles", "Unlimited AI Assistant messages"),
         ("wand.and.stars", "AI-powered stock suggestions"),
-        ("chart.xyaxis.line", "Full chart history — 3M, 6M, 1Y & 5Y"),
+        ("waveform.path.ecg", "Advanced Risk Analysis — volatility & beta"),
         ("bell.badge.fill", "Unlimited price alerts"),
         ("square.and.arrow.up", "Export your tax summary as CSV"),
         ("heart.fill", "Support a fast-moving indie app"),

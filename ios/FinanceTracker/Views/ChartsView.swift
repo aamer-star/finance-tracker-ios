@@ -3,16 +3,13 @@ import SwiftUI
 /// Port of src/pages/Charts.tsx — search/select a stock, rich quote header, chart, and stats.
 struct ChartsView: View {
     @EnvironmentObject var store: DataStore
-    @EnvironmentObject var storeManager: StoreManager
     @State private var query = ""
     @State private var results: [StockSearchResult] = []
     @State private var selected: String?
     @State private var range = "1d"
-    @State private var lastFreeRange = "1d"
     @State private var points: [PricePoint] = []
     @State private var loading = false
     @State private var searchTask: Task<Void, Never>?
-    @State private var showPaywall = false
 
     /// Drives live auto-refresh of the selected chart.
     private let liveTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
@@ -55,15 +52,7 @@ struct ChartsView: View {
             }
         }
         .navigationTitle("Charts")
-        .onChange(of: range) { _, newRange in
-            // Extended history (3M+) is a Pro feature: bounce free users to the paywall
-            // and revert to their last allowed range.
-            if !storeManager.isPro && !ProLimits.isChartRangeFree(newRange) {
-                range = lastFreeRange
-                showPaywall = true
-                return
-            }
-            lastFreeRange = newRange
+        .onChange(of: range) { _, _ in
             if selected != nil { Task { await load() } }
         }
         .onReceive(liveTimer) { _ in
@@ -73,9 +62,6 @@ struct ChartsView: View {
                 await store.loadQuote(t)
                 await load(silent: true)
             }
-        }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView(reason: "Full chart history (3M, 6M, 1Y, 5Y) is a Pro feature.")
         }
     }
 

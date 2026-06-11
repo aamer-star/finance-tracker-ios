@@ -9,9 +9,27 @@ final class StoreManager: ObservableObject {
     static let shared = StoreManager()
 
     @Published private(set) var products: [Product] = []
+    /// True if the user has an active subscription OR has been granted free Pro.
     @Published private(set) var isPro = false
     @Published private(set) var loadingProducts = false
     @Published var purchaseError: String?
+
+    /// Split inputs to `isPro`: a real StoreKit entitlement, or a server-granted comp.
+    private var entitled = false
+    private var comped = false
+    private func recomputePro() { isPro = entitled || comped }
+
+    /// Apply a complimentary-Pro grant fetched from the backend.
+    func applyComped(_ value: Bool) {
+        comped = value
+        recomputePro()
+    }
+
+    /// Re-check whether this account is on the server's free-Pro list.
+    func refreshComped() async {
+        let pro = await APIClient.shared.fetchProStatus()
+        applyComped(pro)
+    }
 
     private var updatesTask: Task<Void, Never>?
 
@@ -97,7 +115,8 @@ final class StoreManager: ObservableObject {
                 active = true
             }
         }
-        isPro = active
+        entitled = active
+        recomputePro()
     }
 
     private func handle(transactionResult: VerificationResult<StoreKit.Transaction>) async {

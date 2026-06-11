@@ -72,6 +72,20 @@ final class APIClient {
         var text: String { error ?? error_description ?? message ?? msg ?? "" }
     }
 
+    // MARK: - Complimentary Pro status (/api/pro-status)
+
+    /// Whether the signed-in user's email is on the server's comped list.
+    func fetchProStatus() async -> Bool {
+        guard let token = await AuthManager.shared.validToken() else { return false }
+        struct Resp: Decodable { var pro: Bool? }
+        do {
+            let r: Resp = try await get("/api/pro-status", token: token)
+            return r.pro ?? false
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - Cloud data sync (/api/user-data)
 
     func loadFromCloud() async -> AppData? {
@@ -122,13 +136,24 @@ final class APIClient {
     // MARK: - Price history (/api/history)
 
     func fetchHistory(ticker: String, range: String) async -> [PricePoint] {
-        // Intraday ranges aren't in the backend's params map, so fetch them straight
-        // from Yahoo's v8 chart endpoint (no crumb needed) via the CORS proxy.
+        // Route EVERY range through Yahoo's v8 chart endpoint directly (no crumb
+        // needed, works on-device). This guarantees each time period returns its own
+        // data, instead of the longer ranges going through a flaky backend path.
+        let (yahooRange, interval): (String, String)
         switch range {
-        case "1d": return await fetchYahooChart(ticker, yahooRange: "1d", interval: "5m")
-        case "1w": return await fetchYahooChart(ticker, yahooRange: "5d", interval: "15m")
-        default: break
+        case "1d":  (yahooRange, interval) = ("1d", "5m")
+        case "1w":  (yahooRange, interval) = ("5d", "30m")
+        case "1mo": (yahooRange, interval) = ("1mo", "1d")
+        case "3mo": (yahooRange, interval) = ("3mo", "1d")
+        case "6mo": (yahooRange, interval) = ("6mo", "1d")
+        case "1y":  (yahooRange, interval) = ("1y", "1d")
+        case "5y":  (yahooRange, interval) = ("5y", "1wk")
+        default:    (yahooRange, interval) = ("6mo", "1d")
         }
+        let direct = await fetchYahooChart(ticker, yahooRange: yahooRange, interval: interval)
+        if !direct.isEmpty { return direct }
+
+        // Fallback to the backend's crumbed endpoint if the direct call returns nothing.
         guard let t = ticker.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed),
               let r = range.addingPercentEncoding(withAllowedCharacters: APIClient.uriComponentAllowed) else { return [] }
         struct Resp: Decodable { var points: [PricePoint]? }

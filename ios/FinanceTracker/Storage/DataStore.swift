@@ -70,6 +70,7 @@ final class DataStore: ObservableObject {
     /// Called on launch when already authenticated.
     func bootstrapCloud() async {
         guard AuthManager.shared.isAuthenticated else { return }
+        await StoreManager.shared.refreshComped()
         if let cloud = await APIClient.shared.loadFromCloud() {
             data = smartMerge(cloud: cloud, local: DataStore.load())
             persist()
@@ -88,6 +89,7 @@ final class DataStore: ObservableObject {
         } else if !local.transactions.isEmpty {
             await APIClient.shared.saveToCloud(local)
         }
+        await StoreManager.shared.refreshComped()
         await loadQuotes()
     }
 
@@ -96,6 +98,7 @@ final class DataStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: DataStore.storageKey)
         ChatHistory.clear()
         ValueHistory.clear()
+        StoreManager.shared.applyComped(false)
         data = .empty
         quotes = [:]
     }

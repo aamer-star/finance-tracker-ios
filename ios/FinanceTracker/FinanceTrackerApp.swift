@@ -35,6 +35,7 @@ struct FinanceTrackerApp: App {
             .tint(Theme.accent)
             .task {
                 await storeManager.refreshEntitlements()
+                await storeManager.refreshComped()
             }
         }
         .onChange(of: scenePhase) { _, phase in
