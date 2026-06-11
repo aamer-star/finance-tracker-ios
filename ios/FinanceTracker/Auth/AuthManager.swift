@@ -118,6 +118,26 @@ final class AuthManager: ObservableObject {
         clearSession()
     }
 
+    // MARK: - Password reset
+
+    /// Triggers a password-reset email via the backend. Returns nil on success,
+    /// or an error message. (The server always reports success to avoid leaking
+    /// which emails are registered.)
+    func requestPasswordReset(email: String) async -> String? {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        guard trimmed.contains("@") else { return "Enter a valid email address." }
+        struct Resp: Decodable { var ok: Bool?; var error: String? }
+        do {
+            let resp: Resp = try await APIClient.shared.post("/api/reset-password", body: ["email": trimmed])
+            if let err = resp.error, !err.isEmpty { return err }
+            return nil
+        } catch let APIError.server(message) {
+            return message
+        } catch {
+            return "Network error. Try again."
+        }
+    }
+
     // MARK: - Account deletion (Apple requirement)
 
     /// Permanently deletes the account on the server, then clears the local session.

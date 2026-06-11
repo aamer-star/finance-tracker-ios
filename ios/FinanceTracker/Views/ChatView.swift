@@ -45,6 +45,24 @@ struct ChatView: View {
         }
         .navigationTitle("AI Assistant")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if !messages.isEmpty {
+                    Button(role: .destructive) {
+                        messages = []
+                        ChatHistory.clear()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                }
+            }
+        }
+        .onAppear {
+            if messages.isEmpty { messages = ChatHistory.load() }
+        }
+        .onChange(of: messages) { _, newValue in
+            ChatHistory.save(newValue)
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView(reason: "You've used your 5 free AI messages today.")
         }

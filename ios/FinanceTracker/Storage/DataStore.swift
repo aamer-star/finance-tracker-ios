@@ -94,6 +94,7 @@ final class DataStore: ObservableObject {
     func signOut() {
         AuthManager.shared.signOut()
         UserDefaults.standard.removeObject(forKey: DataStore.storageKey)
+        ChatHistory.clear()
         data = .empty
         quotes = [:]
     }
@@ -104,6 +105,7 @@ final class DataStore: ObservableObject {
         data = .empty
         quotes = [:]
         UserDefaults.standard.removeObject(forKey: DataStore.storageKey)
+        ChatHistory.clear()
     }
 
     // MARK: - Quotes

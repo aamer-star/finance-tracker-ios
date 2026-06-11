@@ -12,6 +12,9 @@ struct AuthView: View {
     @State private var password = ""
     @State private var error: String?
     @State private var loading = false
+    @State private var showReset = false
+    @State private var resetEmail = ""
+    @State private var resetNotice: String?
 
     enum Mode { case signin, signup }
 
@@ -54,6 +57,15 @@ struct AuthView: View {
                             }
                             .disabled(loading || !isValid)
                             .opacity(isValid ? 1 : 0.5)
+
+                            if mode == .signin {
+                                Button("Forgot password?") {
+                                    resetEmail = email
+                                    showReset = true
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(Theme.accent)
+                            }
                         }
                         .card(padding: 20)
 
@@ -72,6 +84,28 @@ struct AuthView: View {
             }
         }
         .presentationDetents([.large])
+        .alert("Reset password", isPresented: $showReset) {
+            TextField("Email", text: $resetEmail)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+            Button("Send Reset Link") { sendReset() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("We'll email you a link to set a new password.")
+        }
+        .alert("Check your email", isPresented: .constant(resetNotice != nil)) {
+            Button("OK") { resetNotice = nil }
+        } message: {
+            Text(resetNotice ?? "")
+        }
+    }
+
+    private func sendReset() {
+        let target = resetEmail
+        Task {
+            let err = await auth.requestPasswordReset(email: target)
+            resetNotice = err ?? "If an account exists for \(target), a reset link is on its way. Check your inbox and spam folder."
+        }
     }
 
     private var header: some View {
