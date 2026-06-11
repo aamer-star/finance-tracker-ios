@@ -3,7 +3,9 @@ import SwiftUI
 /// Port of src/pages/Alerts.tsx — price alerts checked against live quotes.
 struct AlertsView: View {
     @EnvironmentObject var store: DataStore
+    @EnvironmentObject var storeManager: StoreManager
     @State private var showAdd = false
+    @State private var showPaywall = false
 
     var body: some View {
         ZStack {
@@ -24,10 +26,22 @@ struct AlertsView: View {
         .navigationTitle("Price Alerts")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showAdd = true } label: { Image(systemName: "plus") }
+                Button { addTapped() } label: { Image(systemName: "plus") }
             }
         }
         .sheet(isPresented: $showAdd) { AddAlertView() }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: "Free accounts can set up to \(ProLimits.freeAlerts) price alerts.")
+        }
+    }
+
+    /// Free tier is capped at a few alerts; beyond that, nudge to Pro.
+    private func addTapped() {
+        if !storeManager.isPro && store.data.alerts.count >= ProLimits.freeAlerts {
+            showPaywall = true
+        } else {
+            showAdd = true
+        }
     }
 
     private func row(_ alert: PriceAlert) -> some View {

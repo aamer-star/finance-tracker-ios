@@ -3,10 +3,12 @@ import SwiftUI
 /// Port of src/pages/Chat.tsx — AI assistant with live portfolio context.
 struct ChatView: View {
     @EnvironmentObject var store: DataStore
+    @EnvironmentObject var storeManager: StoreManager
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
     @State private var sending = false
     @State private var error: String?
+    @State private var showPaywall = false
 
     var body: some View {
         ZStack {
@@ -28,11 +30,24 @@ struct ChatView: View {
                 if let error {
                     Text(error).font(.caption).foregroundStyle(Theme.negative).padding(.horizontal)
                 }
+                if !storeManager.isPro {
+                    Text("\(AIUsage.shared.remainingToday) free messages left today · Upgrade to Pro for unlimited")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.mutedText)
+                        .padding(.top, 4)
+                }
+                Text("AI insights are informational only — not financial advice.")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.mutedText.opacity(0.8))
+                    .padding(.top, 2)
                 inputBar
             }
         }
         .navigationTitle("AI Assistant")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: "You've used your 5 free AI messages today.")
+        }
     }
 
     private var welcome: some View {
@@ -113,6 +128,12 @@ struct ChatView: View {
     private func send() {
         let text = input.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, !sending else { return }
+        // Free tier: cap daily messages, then nudge to Pro.
+        guard AIUsage.shared.canSend(isPro: storeManager.isPro) else {
+            showPaywall = true
+            return
+        }
+        if !storeManager.isPro { AIUsage.shared.record() }
         error = nil
         messages.append(ChatMessage(role: .user, content: text))
         input = ""

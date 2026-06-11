@@ -117,6 +117,25 @@ final class AuthManager: ObservableObject {
     func signOut() {
         clearSession()
     }
+
+    // MARK: - Account deletion (Apple requirement)
+
+    /// Permanently deletes the account on the server, then clears the local session.
+    /// Returns nil on success, or an error message on failure.
+    func deleteAccount() async -> String? {
+        guard let token = await validToken() else { return "You must be signed in to delete your account." }
+        struct Resp: Decodable { var ok: Bool?; var error: String? }
+        do {
+            let resp: Resp = try await APIClient.shared.post("/api/delete-account", body: [:], token: token)
+            if let err = resp.error, !err.isEmpty { return err }
+            clearSession()
+            return nil
+        } catch let APIError.server(message) {
+            return message
+        } catch {
+            return "Network error. Try again."
+        }
+    }
 }
 
 // Supabase token grant response shape.

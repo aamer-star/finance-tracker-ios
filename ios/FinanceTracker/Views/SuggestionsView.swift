@@ -3,10 +3,12 @@ import SwiftUI
 /// Port of src/pages/Suggestions.tsx — AI-suggested complementary stocks.
 struct SuggestionsView: View {
     @EnvironmentObject var store: DataStore
+    @EnvironmentObject var storeManager: StoreManager
     @State private var suggestions: [AISuggestion] = []
     @State private var loading = false
     @State private var error: String?
     @State private var added: Set<String> = []
+    @State private var showPaywall = false
 
     var body: some View {
         ZStack {
@@ -34,16 +36,31 @@ struct SuggestionsView: View {
                         Text(error).font(.footnote).foregroundStyle(Theme.negative)
                     }
                     ForEach(suggestions) { card($0) }
+
+                    if !suggestions.isEmpty {
+                        Text("AI suggestions are informational only — not financial advice. Do your own research before investing.")
+                            .font(.caption2).foregroundStyle(Theme.mutedText)
+                    }
                 }
                 .padding(16)
             }
         }
         .navigationTitle("AI Suggestions")
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: "AI stock suggestions are a Pro feature.")
+        }
     }
 
     private var intro: some View {
-        Text("Claude analyzes your holdings and suggests 5 complementary US stocks to fill diversification gaps.")
-            .font(.footnote).foregroundStyle(Theme.mutedText)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("AI analyzes your holdings and suggests 5 complementary US stocks to fill diversification gaps.")
+                .font(.footnote).foregroundStyle(Theme.mutedText)
+            if !storeManager.isPro {
+                Label("Pro feature", systemImage: "crown.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+        }
     }
 
     private func card(_ s: AISuggestion) -> some View {
@@ -88,6 +105,10 @@ struct SuggestionsView: View {
     }
 
     private func generate() {
+        guard storeManager.isPro else {
+            showPaywall = true
+            return
+        }
         error = nil
         loading = true
         let holdings = store.holdings

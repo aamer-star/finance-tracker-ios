@@ -3,6 +3,8 @@ import SwiftUI
 /// Port of src/pages/TaxSummary.tsx — realized (short/long term) & unrealized gains.
 struct TaxSummaryView: View {
     @EnvironmentObject var store: DataStore
+    @EnvironmentObject var storeManager: StoreManager
+    @State private var showPaywall = false
 
     private var realized: [RealizedGain] { store.realizedGains }
     private var shortTerm: Double { realized.filter { !$0.isLongTerm }.reduce(0) { $0 + $1.gain } }
@@ -54,6 +56,43 @@ struct TaxSummaryView: View {
             }
         }
         .navigationTitle("Tax Summary")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if storeManager.isPro {
+                    ShareLink(item: exportCSV()) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .disabled(realized.isEmpty && imported == 0)
+                } else {
+                    Button { showPaywall = true } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(reason: "Exporting your tax summary is a Pro feature.")
+        }
+    }
+
+    /// Builds a CSV of every realized lot and writes it to a temp file for sharing.
+    private func exportCSV() -> URL {
+        var lines = ["Ticker,Term,Buy Date,Sell Date,Shares,Buy Price,Sell Price,Gain,Account"]
+        for g in realized {
+            let term = g.isLongTerm ? "Long" : "Short"
+            lines.append("\(g.ticker),\(term),\(g.buyDate),\(g.sellDate),\(g.shares),\(g.buyPrice),\(g.sellPrice),\(g.gain),\(g.account)")
+        }
+        lines.append("")
+        lines.append("Short-Term Realized,\(shortTerm)")
+        lines.append("Long-Term Realized,\(longTerm)")
+        if imported != 0 { lines.append("Imported,\(imported)") }
+        lines.append("Total Realized,\(totalRealized)")
+        lines.append("Unrealized,\(unrealized)")
+
+        let csv = lines.joined(separator: "\n")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tax-summary.csv")
+        try? csv.write(to: url, atomically: true, encoding: .utf8)
+        return url
     }
 
     private var lots: some View {

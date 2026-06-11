@@ -19,4 +19,17 @@ enum Config {
         let p = path.hasPrefix("/") ? path : "/\(path)"
         return URL(string: base + p)
     }
+
+    /// Hosted legal documents (served as static files from the same Vercel deployment).
+    static let privacyPolicyURL = URL(string: "\(apiBaseURL)/privacy.html")!
+    static let termsURL = URL(string: "\(apiBaseURL)/terms.html")!
+    static let supportEmail = "aamer@rhabib.com"
+}
+
+/// In-app purchase product identifiers. These must match the products you create in
+/// App Store Connect (and the local FinanceTracker.storekit file used for testing).
+enum ProductIDs {
+    static let monthly = "com.thrive.financetracker.pro.monthly"
+    static let yearly = "com.thrive.financetracker.pro.yearly"
+    static let all: [String] = [monthly, yearly]
 }

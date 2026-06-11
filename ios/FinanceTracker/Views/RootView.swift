@@ -51,11 +51,31 @@ struct RootView: View {
 struct MoreView: View {
     @EnvironmentObject var store: DataStore
     @EnvironmentObject var auth: AuthManager
+    @EnvironmentObject var storeManager: StoreManager
     @Binding var showUpload: Bool
     @State private var showAuth = false
+    @State private var showPaywall = false
 
     var body: some View {
         List {
+            if !storeManager.isPro {
+                Section {
+                    Button { showPaywall = true } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "crown.fill")
+                                .font(.title3)
+                                .foregroundStyle(Theme.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Upgrade to Pro").font(.headline).foregroundStyle(.white)
+                                Text("Unlimited AI, full charts, and more")
+                                    .font(.caption).foregroundStyle(Theme.mutedText)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(Theme.mutedText)
+                        }
+                    }
+                }
+            }
             Section("Manage") {
                 Button { showUpload = true } label: { Label("Import Excel / CSV", systemImage: "square.and.arrow.down") }
                 NavigationLink { TransactionsView() } label: { Label("Transactions", systemImage: "list.bullet.rectangle") }
@@ -90,6 +110,9 @@ struct MoreView: View {
         .navigationTitle("More")
         .sheet(isPresented: $showAuth) {
             AuthView()
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
         }
     }
 }
