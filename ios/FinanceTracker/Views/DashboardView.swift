@@ -104,6 +104,7 @@ struct DashboardView: View {
                 if !store.accountFilters.isEmpty { accountPicker }
                 LiveClock()
                 statGrid
+                moversCard
                 realizedCard
                 holdingsTable
             }
@@ -151,6 +152,53 @@ struct DashboardView: View {
                      sub: "Realized: \(Format.currency(netProfit.realized))",
                      positive: netProfit.total >= 0,
                      loading: store.quotesLoading)
+        }
+    }
+
+    // MARK: - Movers (today's biggest mover + best/worst position)
+
+    private struct Mover { var ticker: String; var pct: Double }
+    private struct MoverInfo { var top: Mover?; var best: Mover?; var worst: Mover? }
+
+    private var moverInfo: MoverInfo? {
+        let withQuotes = holdings.filter { store.quotes[$0.ticker] != nil }
+        guard holdings.count >= 2, !withQuotes.isEmpty else { return nil }
+
+        var top: Mover?
+        if let m = withQuotes.max(by: { abs(store.quotes[$0.ticker]!.changePercent) < abs(store.quotes[$1.ticker]!.changePercent) }),
+           let q = store.quotes[m.ticker] {
+            top = Mover(ticker: m.ticker, pct: q.changePercent)
+        }
+        let ranked = holdings.map { h -> Mover in
+            let ret = h.totalCost > 0 ? (h.shares * store.price(for: h) - h.totalCost) / h.totalCost * 100 : 0
+            return Mover(ticker: h.ticker, pct: ret)
+        }
+        let best = ranked.max { $0.pct < $1.pct }
+        let worst = ranked.min { $0.pct < $1.pct }
+        return MoverInfo(top: top, best: best, worst: worst)
+    }
+
+    @ViewBuilder private var moversCard: some View {
+        if let info = moverInfo {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("MOVERS").font(.caption2.weight(.semibold)).foregroundStyle(Theme.mutedText)
+                if let t = info.top { moverRow("Top mover today", mover: t) }
+                if let b = info.best { moverRow("Best position", mover: b) }
+                if let w = info.worst, w.ticker != info.best?.ticker { moverRow("Worst position", mover: w) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card()
+        }
+    }
+
+    private func moverRow(_ label: String, mover: Mover) -> some View {
+        HStack {
+            Text(label).font(.caption).foregroundStyle(Theme.mutedText)
+            Spacer()
+            Text(mover.ticker).font(.caption.weight(.bold)).foregroundStyle(.white)
+            Text(Format.percent(mover.pct)).font(.caption.weight(.medium))
+                .foregroundStyle(Theme.gainColor(mover.pct))
+                .frame(width: 72, alignment: .trailing)
         }
     }
 

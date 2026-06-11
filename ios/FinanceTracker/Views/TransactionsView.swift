@@ -55,6 +55,9 @@ struct TransactionsView: View {
                         .clipShape(Capsule())
                 }
                 Text("\(t.date) · \(t.account)").font(.caption2).foregroundStyle(Theme.mutedText)
+                if let notes = t.notes, !notes.isEmpty {
+                    Text(notes).font(.caption2).foregroundStyle(Theme.mutedText).italic().lineLimit(1)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
@@ -94,6 +97,7 @@ struct AddTransactionView: View {
     @State private var price: String
     @State private var date: Date
     @State private var account: String
+    @State private var notes: String
 
     init(editing: Transaction? = nil) {
         self.editing = editing
@@ -103,6 +107,7 @@ struct AddTransactionView: View {
         _price = State(initialValue: editing.map { String($0.price) } ?? "")
         _date = State(initialValue: editing.flatMap { PortfolioMath.parseDate($0.date) } ?? Date())
         _account = State(initialValue: editing?.account ?? "Default")
+        _notes = State(initialValue: editing?.notes ?? "")
     }
 
     var body: some View {
@@ -118,6 +123,10 @@ struct AddTransactionView: View {
                     TextField("Price", text: $price).keyboardType(.decimalPad)
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                     TextField("Account", text: $account)
+                }
+                Section("Notes (optional)") {
+                    TextField("e.g. why you made this trade", text: $notes, axis: .vertical)
+                        .lineLimit(1...4)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -144,6 +153,8 @@ struct AddTransactionView: View {
         df.locale = Locale(identifier: "en_US_POSIX")
         let dateStr = df.string(from: date)
         let acct = account.isEmpty ? "Default" : account
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteValue = trimmedNotes.isEmpty ? nil : trimmedNotes
         if let editing {
             let updated = Transaction(
                 id: editing.id,
@@ -153,7 +164,7 @@ struct AddTransactionView: View {
                 price: Double(price) ?? 0,
                 date: dateStr,
                 account: acct,
-                notes: editing.notes
+                notes: noteValue
             )
             store.updateTransaction(updated)
         } else {
@@ -164,7 +175,8 @@ struct AddTransactionView: View {
                 shares: Double(shares) ?? 0,
                 price: Double(price) ?? 0,
                 date: dateStr,
-                account: acct
+                account: acct,
+                notes: noteValue
             )
             store.addTransactions([t])
         }
