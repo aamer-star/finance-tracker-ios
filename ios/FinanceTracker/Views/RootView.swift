@@ -86,6 +86,7 @@ struct MoreView: View {
                 NavigationLink { ChatView() } label: { Label("AI Assistant", systemImage: "sparkles") }
                 NavigationLink { HealthScoreView() } label: { Label("Health Score", systemImage: "heart.text.square.fill") }
                 NavigationLink { AnalyticsView() } label: { Label("Analytics", systemImage: "chart.bar.fill") }
+                NavigationLink { RiskView() } label: { Label("Risk Analysis", systemImage: "waveform.path.ecg") }
                 NavigationLink { DividendView() } label: { Label("Dividend Income", systemImage: "dollarsign.circle.fill") }
                 NavigationLink { TaxSummaryView() } label: { Label("Tax Summary", systemImage: "doc.text.fill") }
                 NavigationLink { SuggestionsView() } label: { Label("AI Suggestions", systemImage: "wand.and.stars") }
